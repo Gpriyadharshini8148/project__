@@ -1,0 +1,55 @@
+{
+  "name": "sfdc-pos-playwright-typescript",
+  "version": "1.0.0",
+  "description": "POS Automation Framework - TypeScript with Playwright",
+  "type": "module",
+  "scripts": {
+    "setup": "powershell -ExecutionPolicy Bypass -File ./setup.ps1",
+    "validate": "node validate.cjs",
+    "postinstall": "playwright install chromium --with-deps || echo Playwright browsers will be installed on first run",
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:ui": "npx playwright test --ui",
+    "test:debug": "npx playwright test --debug",
+    "test:chrome": "npx playwright test --headed --project=chromium",
+    "test:watch": "npx playwright test --headed --project=chromium --workers=2 --watch",
+    "test:fast": "cross-env SLOW_MO=0 npx playwright test --headed --project=chromium",
+    "test:slow": "cross-env SLOW_MO=1000 npx playwright test --headed --project=chromium",
+    "test:ci": "cross-env HEADLESS=true SLOW_MO=0 npx playwright test",
+    "test:regression": "npx playwright test",
+    "test:server-run": "node scripts/run-sequential.cjs",
+    "test:server-dry-run": "node scripts/run-sequential.cjs --dry-run",
+    "test:smart-run": "node scripts/run-with-retry.cjs",
+    "test:smart-dry-run": "node scripts/run-with-retry.cjs --dry-run",
+    "test:smart-no-retry": "node scripts/run-with-retry.cjs --no-retry",
+    "report": "node scripts/open-report.cjs",
+    "allure:generate": "node scripts/generate-allure-report.cjs",
+    "allure:open": "node scripts/generate-allure-report.cjs --open",
+    "allure:report": "node scripts/generate-allure-report.cjs --open",
+    "archive-report": "node scripts/archive-report.cjs",
+    "clean": "rimraf reports test-results dist",
+    "verify": "node -e \"console.log('✓ Node.js:', process.version); try { require('@playwright/test'); console.log('✓ Playwright installed'); } catch(e) { console.log('✗ Playwright NOT installed - run: npm install'); process.exit(1); }\""
+  },
+  "keywords": [
+    "playwright",
+    "typescript",
+    "automation",
+    "salesforce",
+    "pos"
+  ],
+  "author": "Automation Team",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.0.0",
+    "allure-commandline": "^2.43.0",
+    "allure-playwright": "^3.10.2",
+    "cross-env": "^10.1.0",
+    "dotenv": "^16.4.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SFDC POS — Full E2E Journey</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f4f6fb; color: #222; padding: 32px 20px; }
+    .container { max-width: 900px; margin: auto; }
+    h1 { font-size: 22px; color: #1a3c6e; border-left: 5px solid #2563eb; padding-left: 14px; margin-bottom: 6px; }
+    .subtitle { font-size: 13px; color: #555; margin-bottom: 28px; padding-left: 19px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #fff; background: #059669; padding: 9px 16px; border-radius: 6px 6px 0 0; margin-top: 28px; }
+    .badge { background: #047857; border-radius: 4px; font-size: 11px; padding: 2px 8px; font-weight: 600; margin-left: 8px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 0 0 6px 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    thead th { background: #e8f8f5; color: #065f46; font-size: 12px; font-weight: 700; text-align: left; padding: 10px 14px; border-bottom: 2px solid #a3e4d7; text-transform: uppercase; letter-spacing: 0.4px; }
+    thead th:first-child { width: 60px; text-align: center; }
+    thead th:nth-child(2) { width: 180px; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr:hover { background: #d1fae5; }
+    tbody td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #e5eaf3; vertical-align: middle; }
+    tbody td:first-child { text-align: center; font-weight: 700; color: #1a3c6e; background: #f1f5f9;}
+    tbody td:nth-child(2) { font-weight: 700; color: #065f46; }
+    .btn-bar { display: flex; gap: 12px; margin-bottom: 24px; }
+    button { background: #2563eb; color: white; border: none; padding: 9px 22px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button.g { background: #059669; }
+    button.g:hover { background: #047857; }
+    @media print { body { background: white; padding: 10px; } .btn-bar { display: none; } table { box-shadow: none; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>SFDC POS - Full End-to-End Journey</h1>
+  <p class="subtitle">Complete Master Flow: Search Dealer &rarr; Asset Cart | Generated: 27-Aug-2026</p>
+  
+  <div class="btn-bar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="g" onclick="downloadCSV()">Download as CSV</button>
+  </div>
+
+  <div class="section-title">Master E2E Flow <span class="badge">00_e2e_fullflow.spec.ts</span></div>
+  <table>
+    <thead><tr><th>Step</th><th>Module Name</th><th>Action performed in E2E Flow</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Search Dealer</td><td>Search for dealer by Dealer Code and navigate to dealer dashboard</td></tr>
+      <tr><td>2</td><td>App Status</td><td>Start a New Application (New App / Proceed)</td></tr>
+      <tr><td>3</td><td>Zip Code</td><td>Enter a valid Zip Code and confirm</td></tr>
+      <tr><td>4</td><td>MITC</td><td>Read/Scroll through MITC document and Accept terms</td></tr>
+      <tr><td>5</td><td>PAN Verification</td><td>Enter PAN details, Verify via NSDL, and Proceed</td></tr>
+      <tr><td>6</td><td>Product Selection</td><td>Enter Model manually, Select Scheme, and Confirm selection</td></tr>
+      <tr><td>7</td><td>Income Declaration</td><td>Enter monthly income (e.g., 30000) and Proceed</td></tr>
+      <tr><td>8</td><td>KYC</td><td>Select "Customer doesn't have one of the listed Document types", Save, and Proceed</td></tr>
+      <tr><td>9</td><td>POI (Proof of Identity)</td><td>Fill First/Last Name, DOB, Aadhaar Number, Gender, Employment Type and Proceed</td></tr>
+      <tr><td>10</td><td>POA (Proof of Address)</td><td>Fill Zip Code, BFL Branch, full Address details, Aadhaar as POA type, and Proceed</td></tr>
+      <tr><td>11</td><td>Surrogate Details</td><td>Select Credit Program (e.g., Prime Banking), set RSA=No, and click Check Approval</td></tr>
+      <tr><td>12</td><td>Approval Details</td><td>View the Approved offer/popup and Proceed to the next stage</td></tr>
+      <tr><td>13</td><td>Additional Details</td><td>Fill Personal Details (Mother's Name, Marital Status) and Office Address, then Continue</td></tr>
+      <tr><td>14</td><td>Asset Cart</td><td>Wait for auto-navigation to complete and successfully land on the Asset Cart screen</td></tr>
+    </tbody>
+  </table>
+
+</div>
+<script>
+function downloadCSV() {
+  var rows = [
+    ["Step","Module Name","Action performed in E2E Flow"],
+    ["1","Search Dealer","Search for dealer by Dealer Code and navigate to dealer dashboard"],
+    ["2","App Status","Start a New Application (New App / Proceed)"],
+    ["3","Zip Code","Enter a valid Zip Code and confirm"],
+    ["4","MITC","Read/Scroll through MITC document and Accept terms"],
+    ["5","PAN Verification","Enter PAN details, Verify via NSDL, and Proceed"],
+    ["6","Product Selection","Enter Model manually, Select Scheme, and Confirm selection"],
+    ["7","Income Declaration","Enter monthly income (e.g., 30000) and Proceed"],
+    ["8","KYC","Select Customer doesn't have one of the listed Document types, Save, and Proceed"],
+    ["9","POI (Proof of Identity)","Fill First/Last Name, DOB, Aadhaar Number, Gender, Employment Type and Proceed"],
+    ["10","POA (Proof of Address)","Fill Zip Code, BFL Branch, full Address details, Aadhaar as POA type, and Proceed"],
+    ["11","Surrogate Details","Select Credit Program (e.g., Prime Banking), set RSA=No, and click Check Approval"],
+    ["12","Approval Details","View the Approved offer/popup and Proceed to the next stage"],
+    ["13","Additional Details","Fill Personal Details (Mother's Name, Marital Status) and Office Address, then Continue"],
+    ["14","Asset Cart","Wait for auto-navigation to complete and successfully land on the Asset Cart screen"]
+  ];
+  var csv = rows.map(function(r){return r.map(function(c){return '"'+c.replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'SFDC_POS_E2E_Full_Journey.csv';
+  a.click();
+}
+</script>
+</body>
+</html>

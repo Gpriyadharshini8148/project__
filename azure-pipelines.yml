@@ -1,0 +1,217 @@
+# ============================================================================
+# Azure DevOps Pipeline — SFDC POS Playwright Automation
+# ============================================================================
+#
+#  NO hardcoded file lists here.
+# The file list lives in ONE place only:
+#   → scripts/run-sequential.cjs  (TEST_FILES array)
+#
+# To add/remove/reorder test files:
+#   1. Open scripts/run-sequential.cjs
+#   2. Edit the TEST_FILES array
+#   3. Done — pipeline picks it up automatically on next run
+#
+# Execution strategy (controlled entirely by run-sequential.cjs):
+#   • Files run SEQUENTIALLY  (one file fully completes before the next starts)
+#   • Tests WITHIN each file  run IN PARALLEL (workers = test count, dynamic)
+#   • Combined HTML report is auto-generated after all files finish
+# ============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - tests/**
+      - scripts/run-sequential.cjs
+      - playwright.config.ts
+      - package.json
+
+pr: none
+
+# ── Pool ─────────────────────────────────────────────────────────────────────
+# Replace 'YOUR_AGENT_POOL_NAME' with your actual agent pool name in Azure DevOps.
+pool:
+  name: 'YOUR_AGENT_POOL_NAME'
+  demands:
+    - agent.os -equals Windows_NT
+
+# ── Variables ─────────────────────────────────────────────────────────────────
+variables:
+  NODE_VERSION: '22'
+  MAX_WORKERS: '20'
+  HEADLESS: 'true'
+  SLOW_MO: '0'
+  PW_RETRIES: '1'
+  # Add these as Secret Variables in Azure DevOps:
+  # Pipeline → Edit → Variables → Add (click lock icon to mark as secret)
+  # Variables needed: FOS_URL, FOS_USERNAME, FOS_PASSWORD,
+  #                   ADMIN_URL, ADMIN_USERNAME, ADMIN_PASSWORD,
+  #                   ENVIRONMENT, EXCEL_SUITE_NAME
+
+
+stages:
+
+
+# ── Stage 1 — Setup & Validate ───────────────────────────────────────────────
+
+  - stage: Setup
+    displayName: '🔧 Setup & Validate'
+    jobs:
+      - job: SetupJob
+        displayName: 'Install Dependencies & Dry Run'
+        timeoutInMinutes: 20
+        steps:
+
+          - task: NodeTool@0
+            displayName: 'Use Node.js $(NODE_VERSION)'
+            inputs:
+              versionSpec: '$(NODE_VERSION)'
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: 'npm | "$(Agent.OS)"'
+              path: node_modules
+
+          - script: npm ci
+            displayName: 'npm ci — Install dependencies'
+
+          - script: npx playwright install chromium --with-deps
+            displayName: 'Install Playwright Chromium browser'
+
+          # Dry run — shows how many files & tests will run (no execution)
+          - script: node scripts/run-sequential.cjs --dry-run
+            displayName: '✅ Dry Run — Show files & test counts (no execution)'
+            env:
+              MAX_WORKERS: $(MAX_WORKERS)
+
+
+# ── Stage 2 — Run Tests ──────────────────────────────────────────────────────
+
+  - stage: RunTests
+    displayName: '▶ Run Tests'
+    dependsOn: Setup
+    condition: succeeded()
+    jobs:
+      - job: TestJob
+        displayName: 'Sequential Files → Parallel Test Cases per File'
+        timeoutInMinutes: 180
+        steps:
+
+          - task: NodeTool@0
+            displayName: 'Use Node.js $(NODE_VERSION)'
+            inputs:
+              versionSpec: '$(NODE_VERSION)'
+
+          - task: Cache@2
+            displayName: 'Restore node_modules cache'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: 'npm | "$(Agent.OS)"'
+              path: node_modules
+
+          - script: npm ci
+            displayName: 'npm ci (if cache miss)'
+
+          # Write .env from Azure DevOps secret variables
+          - script: |
+              echo HEADLESS=$(HEADLESS) > .env
+              echo SLOW_MO=$(SLOW_MO) >> .env
+              echo PW_RETRIES=$(PW_RETRIES) >> .env
+              echo FOS_URL=$(FOS_URL) >> .env
+              echo FOS_USERNAME=$(FOS_USERNAME) >> .env
+              echo FOS_PASSWORD=$(FOS_PASSWORD) >> .env
+              echo ADMIN_URL=$(ADMIN_URL) >> .env
+              echo ADMIN_USERNAME=$(ADMIN_USERNAME) >> .env
+              echo ADMIN_PASSWORD=$(ADMIN_PASSWORD) >> .env
+              echo ENVIRONMENT=$(ENVIRONMENT) >> .env
+              echo EXCEL_SUITE_NAME=$(EXCEL_SUITE_NAME) >> .env
+            displayName: 'Write .env from pipeline secrets'
+            env:
+              FOS_URL: $(FOS_URL)
+              FOS_USERNAME: $(FOS_USERNAME)
+              FOS_PASSWORD: $(FOS_PASSWORD)
+              ADMIN_URL: $(ADMIN_URL)
+              ADMIN_USERNAME: $(ADMIN_USERNAME)
+              ADMIN_PASSWORD: $(ADMIN_PASSWORD)
+              ENVIRONMENT: $(ENVIRONMENT)
+              EXCEL_SUITE_NAME: $(EXCEL_SUITE_NAME)
+
+          #  SINGLE STEP — runs everything via the script
+          - script: node scripts/run-sequential.cjs
+            displayName: '▶ Run All Files (Sequential) via run-sequential.cjs'
+            env:
+              CI: 'true'
+              HEADLESS: $(HEADLESS)
+              SLOW_MO: $(SLOW_MO)
+              MAX_WORKERS: $(MAX_WORKERS)
+            continueOnError: true
+
+          # Archive report immediately after tests finish
+          - script: node scripts/archive-report.cjs
+            displayName: ' Archive Report (timestamped ZIP)'
+            condition: always()
+
+
+# ── Stage 3 — Publish Reports (always runs, even if tests fail) ──────────────
+
+  - stage: PublishReports
+    displayName: ' Publish Test Reports'
+    dependsOn: RunTests
+    condition: always()
+    jobs:
+      - job: PublishJob
+        displayName: 'Upload Reports & Artifacts'
+        timeoutInMinutes: 15
+        steps:
+
+          # Combined HTML report (downloadable from Azure DevOps pipeline run)
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Combined HTML Report'
+            condition: always()
+            inputs:
+              pathToPublish: 'playwright-report'
+              artifactName: 'playwright-html-report'
+              publishLocation: 'Container'
+
+          # Archived ZIPs (all historical runs)
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Archived Report ZIPs'
+            condition: always()
+            inputs:
+              pathToPublish: 'reports/archive'
+              artifactName: 'report-archives'
+              publishLocation: 'Container'
+
+          # JSON results
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish JSON Results'
+            condition: always()
+            inputs:
+              pathToPublish: 'reports/test-results.json'
+              artifactName: 'test-results-json'
+              publishLocation: 'Container'
+
+          # JUnit XML — shows pass/fail on the Azure DevOps Tests tab
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results (Tests tab in Azure DevOps)'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'reports/junit/results.xml'
+              mergeTestResults: true
+              testRunTitle: 'SFDC POS — Build $(Build.BuildNumber)'
+              failTaskOnFailedTests: false
+
+          # Failure traces, screenshots, videos
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Failure Traces & Screenshots'
+            condition: always()
+            inputs:
+              pathToPublish: 'test-results'
+              artifactName: 'traces-and-screenshots'
+              publishLocation: 'Container'

@@ -1,0 +1,235 @@
+async function completeFullPrerequisites(context: any, testData: Record<string, string>, options?: { stopAtPan?: boolean }) {
+  const {
+    page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+    panVerificationPage, productSelectionPage, incomeDeclarationPage,
+    kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+  } = context;
+
+  await test.step('Search Dealer', async () => {
+    await dealerSearchPage.navigateToSearchDealer();
+    await dealerSearchPage.selectDealerAndSearch(
+      testData['dealervalue'] || '15741 - VIJAY SALES INDIA PVT LTD # VASAI BR DC15741',
+      testData['mobilenumberlabel'] || 'Mobile Number',
+      MOBILE_NUMBER,
+      testData['searchbutton'] || 'Search'
+    );
+  });
+
+  await test.step('Proceed from App Status', async () => {
+    await appStatusPage.proceedFromAppStatus(
+      testData['appstatuspagename'] || 'App Status',
+      testData['proceedbuttonvalue'] || 'Proceed'
+    );
+  });
+
+  // Handle alternative flow where user is dumped into 'Approval Details' instead of Zip Code
+  if (await appStatusPage.isCurrentScreen('Approval Details')) {
+    await test.step('Hamburger Navigation to Zip Code Details', async () => {
+      console.log('⚠ Landed on Approval Details! Using Hamburger menu to navigate to Zip Code Details...');
+      await page.waitForTimeout(1000);
+      
+      const hamburger = page.getByRole('button', { name: '...' }).first()
+        .or(page.getByText('...', { exact: true }).first())
+        .or(page.locator('.slds-icon-utility-rows').first());
+        
+      await hamburger.click({ force: true });
+      await page.waitForTimeout(1500);
+      
+      const targetLink = page.getByRole('button', { name: 'Zip Code Verification' })
+        .or(page.getByRole('menuitem', { name: /Zip Code Verification/i }));
+        
+      await targetLink.click({ force: true });
+      await page.waitForTimeout(2000);
+      console.log('✓ Hamburger navigation to Zip Code Details complete.');
+    });
+  }
+
+  await test.step('Zip Code Details', async () => {
+    await page.waitForTimeout(2000); 
+    await zipCodePage.fillZipCodeDetails({
+      zipCode: testData['zipcodelabel'] || 'Enter Customer ZipCode',
+      zipCodeValue: testData['zipcodevalue'] || '411014 Pune',
+      bflBranch: testData['bflbranchvalue'] || '411014-Manual Testing Pune',
+      dob: testData['dobvalue'] || '18-12-1996',
+      gender: testData['gendervalue'] || 'Male',
+      language: testData['preferredcommunicationlanguagevalue'] || 'English',
+      preferredLanguage: testData['preferredlanguagevalue'] || 'HINDI',
+      poaAddressType: testData['poaaddresstype'],
+    });
+    await zipCodePage.proceed(testData['proceedbuttonvalue'] || 'Proceed');
+  });
+
+  if (await mitcPage.isCurrentScreen('MITC')) {
+    await test.step('MITC Details', async () => {
+      await mitcPage.fillMitcDetailsWithFirstAndLastName(
+        getVal(testData['firstname'], 'Dummycust'),
+        getVal(testData['lastname'], 'Doe'),
+        getVal(testData['proceedbuttonvalue'], 'Proceed')
+      );
+      await mitcPage.proceedToPanVerification(getVal(testData['proceedbuttonvalue'], 'Proceed'));
+    });
+  }
+
+  await page.waitForTimeout(3000); // Wait for Data Verification screen to render
+  if (await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification'])) {
+    if (options?.stopAtPan) {
+      return; // Stop at PAN Verification to let the custom test flow take over
+    }
+
+    let panProcessed = true;
+    await test.step('PAN Verification (No)', async () => {
+      panProcessed = await panVerificationPage.fillPanVerificationDetails(
+        getVal(testData['panNo'], 'HFHPP1234D'),
+        getVal(testData['firstname'], 'Dummycust'),
+        getVal(testData['lastname'], 'Doe'),
+        getVal(testData['dobvalue'], '18-12-1996'),
+        getVal(testData['proceedbuttonvalue'], 'Proceed')
+      );
+    });
+
+    if (!panProcessed) {
+      await test.step('Hamburger Navigation to Product Selection', async () => {
+        console.log('⚠ PAN prompt not found. Using Hamburger menu to navigate to Product Selection...');
+        const hamburger = page.getByRole('button', { name: '...' }).first()
+          .or(page.getByText('...', { exact: true }).first())
+          .or(page.locator('.slds-icon-utility-rows').first());
+          
+        await hamburger.click({ force: true });
+        await page.waitForTimeout(1500);
+        
+        const targetLink = page.getByRole('button', { name: 'Product Selection' })
+          .or(page.getByRole('menuitem', { name: /Product Selection/i }));
+          
+        await targetLink.click({ force: true });
+        await page.waitForTimeout(2000);
+        console.log('✓ Hamburger navigation to Product Selection complete.');
+      });
+    }
+  }
+
+  await page.waitForTimeout(2000);
+
+  if (await productSelectionPage.isCurrentScreen('Product Selection')) {
+    await test.step('Product Selection', async () => {
+      await productSelectionPage.fillProductDetails(
+        testData['productmodel'] || 'SAMYANG-CAMERA - 10MM F2.8 Canon M',
+        testData['invoiceamount'] || '40000',
+        testData['requiredloanamount'] || '30000',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
+  }
+
+  await page.waitForTimeout(4000);
+
+  if (await incomeDeclarationPage.isCurrentScreen('Income Declaration')) {
+    await test.step('Income Declaration', async () => {
+      await incomeDeclarationPage.fillIncomeDeclaration(
+        '40000',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
+  }
+
+  await page.waitForTimeout(4000);
+
+  if (await kycPage.isCurrentScreen('KYC')) {
+    await test.step('KYC Details', async () => {
+      await kycPage.fillKYCDetails(
+        "Customer doesn't have one of the listed Document types",
+        'Save',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
+  }
+
+  await page.waitForTimeout(4000);
+
+  if (await poiPage.isCurrentScreen('POI')) {
+    await test.step('POI Details', async () => {
+      await poiPage.fillPoiDetails(
+        testData['firstname'] || 'dummy',
+        '',
+        testData['lastname'] || 'test',
+        testData['poitypevalue'] || 'Aadhaar',
+        testData['poinumbervalue'] || '2222',
+        testData['gendervalue'] || 'Male',
+        testData['dobvalue'] || '01-12-2000',
+        testData['employmenttypevalue'] || 'Salaried',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
+  }
+
+  await page.waitForTimeout(4000);
+
+  if (await poaPage.isCurrentScreen('POA')) {
+    await test.step('POA Details', async () => {
+      await poaPage.fillPoaDetails(
+        'Self Owned',
+        testData['zipcodevalue'] || '411014 Pune',
+        testData['bflbranchvalue'] || '411014-Manual Testing Pune',
+        testData['adressline1'] || 'Bajaj Finserv Head Office',
+        testData['adressline2'] || 'Sakore Nagar, Viman Nagar',
+        testData['adressline3'] || 'Pune, Maharashtra',
+        testData['arealocalityvalue'] || 'Sakore Nagar, Viman Nagar',
+        testData['landmarkvalue'] || 'Near Pune International Airport',
+        testData['cityvalue'] || 'Pune',
+        testData['statevalue'] || 'Maharashtra',
+        'Aadhaar',
+        testData['poanumbervalue'] || '2222',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
+  }
+
+  await page.waitForTimeout(4000);
+
+  await test.step('Surrogate Details', async () => {
+    await surrogateDetailsPage.navigateToSurrogateDetails();
+    await surrogateDetailsPage.selectSurrogateDetails(
+      testData['surrogatedetailspagename'] || 'Surrogate Details',
+      testData['processtypelabel'] || 'Process Type',
+      testData['processtypevalue'] || 'Normal',
+      testData['creditprogramlabel'] || 'Credit Program',
+      testData['creditprogramvalue'] || '1.06 [Prime Banking]',
+        testData['checkapprovalbuttonlabel'] || 'Check Approval',
+      'RSA',
+      'No'
+    );
+  });
+
+  await page.waitForTimeout(3000);
+
+  await test.step('Approval Details', async () => {
+    await approvalDetailsPage.navigateToApprovalDetails();
+    await approvalDetailsPage.clickButton(testData['proceedbuttonvalue'] || 'Proceed');
+    await page.waitForTimeout(1000);
+    await approvalDetailsPage.checkForErrors();
+  });
+
+  // App auto-navigates to Additional Details after Approval Proceed
+  await page.waitForTimeout(3000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Navigate to App Status only (for Hamburger suite)
+// ─────────────────────────────────────────────────────────────────────────────
+async function navigateToAppStatus(context: any, testData: Record<string, string>) {
+  const { dealerSearchPage } = context;
+  await test.step('Search Dealer', async () => {
+    await dealerSearchPage.navigateToSearchDealer();
+    await dealerSearchPage.selectDealerAndSearch(
+      testData['dealervalue'] || '15741 - VIJAY SALES INDIA PVT LTD # VASAI BR DC15741',
+      testData['mobilenumberlabel'] || 'Mobile Number',
+      MOBILE_NUMBER,
+    );
+    console.log('✓ Reached App Status. NOT clicking Proceed — going via Hamburger next.');
+  });
+}
+
+
+// =============================================================================
+// SUITE A: E2E — Full Flow auto-landing on Additional Details
+// Run: npx playwright test tests/customer/13_additionalDetails.spec.ts --grep "E2E"
+// =============================================================================

@@ -1,0 +1,7 @@
+{
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "github.copilot.chat.organizationCustomAgents.enabled": true,
+    "github.copilot.chat.agent.enabled": true,
+    "github.copilot.chat.experimental.enabled": true,
+    "chat.agent.enabled": true
+}

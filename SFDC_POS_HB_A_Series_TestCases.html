@@ -1,0 +1,162 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SFDC POS - HB and A-Series Test Cases</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f4f6fb; color: #222; padding: 32px 20px; }
+    .container { max-width: 1100px; margin: auto; }
+    h1 { font-size: 22px; color: #1a3c6e; border-left: 5px solid #2563eb; padding-left: 14px; margin-bottom: 6px; }
+    .subtitle { font-size: 13px; color: #555; margin-bottom: 28px; padding-left: 19px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #fff; background: #1a3c6e; padding: 9px 16px; border-radius: 6px 6px 0 0; margin-top: 28px; }
+    .badge { background: #2563eb; border-radius: 4px; font-size: 11px; padding: 2px 8px; font-weight: 600; margin-left: 8px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 0 0 6px 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    thead th { background: #e8eef8; color: #1a3c6e; font-size: 12px; font-weight: 700; text-align: left; padding: 10px 14px; border-bottom: 2px solid #c0cfe8; text-transform: uppercase; letter-spacing: 0.4px; }
+    thead th:first-child { width: 54px; text-align: center; }
+    thead th:nth-child(2) { width: 130px; }
+    thead th:nth-child(3) { width: 190px; }
+    tbody tr:nth-child(even) { background: #f7f9fd; }
+    tbody tr:hover { background: #dbeafe; }
+    tbody td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #e5eaf3; vertical-align: middle; }
+    tbody td:first-child { text-align: center; font-weight: 600; color: #888; }
+    tbody td:nth-child(2) { font-weight: 700; color: #1a3c6e; font-family: monospace; }
+    .ph { background: #d1fae5; color: #065f46; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .nh { background: #fee2e2; color: #991b1b; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .pe { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .ne { background: #fce7f3; color: #9d174d; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .sum-title { font-size: 15px; font-weight: 700; color: #fff; background: #374151; padding: 9px 16px; border-radius: 6px 6px 0 0; margin-top: 32px; }
+    .sum th { background: #e5e7eb; color: #374151; }
+    .sum td:nth-child(3), .sum td:nth-child(4), .sum td:nth-child(5) { text-align: center; font-weight: 700; }
+    .sum tr:last-child { background: #f1f5f9; font-weight: 800; }
+    .btn-bar { display: flex; gap: 12px; margin-bottom: 24px; }
+    button { background: #2563eb; color: white; border: none; padding: 9px 22px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button.g { background: #059669; }
+    button.g:hover { background: #047857; }
+    @media print { body { background: white; padding: 10px; } .btn-bar { display: none; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>SFDC POS - HB &amp; A-Series E2E Test Cases</h1>
+  <p class="subtitle">Hamburger Navigation (HB) + E2E A-Series tests | Modules 11-15 | Generated: 27-Aug-2026</p>
+  <div class="btn-bar">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="g" onclick="downloadCSV()">Download as CSV</button>
+  </div>
+
+  <div class="section-title">Module 11 - Surrogate Details <span class="badge">11_surrogateDetails.spec.ts</span></div>
+  <table><thead><tr><th>S.No.</th><th>Test Case ID</th><th>Test Case Type</th><th>Description</th></tr></thead><tbody>
+    <tr><td>1</td><td>HB-1</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Bank Name + Credit Program + RSA = No - Check Approval</td></tr>
+    <tr><td>2</td><td>HB-2</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Bank Name + RSA = FOS + Reject Reason - Check Approval</td></tr>
+    <tr><td>3</td><td>HB-3</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Bank Name + RSA = Dealer + Reject Reason - Check Approval</td></tr>
+    <tr><td>4</td><td>HB-4</td><td><span class="nh">Negative (Hamburger)</span></td><td>Hamburger - RSA = FOS without Reject Reason - Expect validation error</td></tr>
+    <tr><td>5</td><td>HB-5</td><td><span class="nh">Negative (Hamburger)</span></td><td>Hamburger - Check Approval without Bank Name - Expect error</td></tr>
+    <tr><td>6</td><td>11A-1</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Surrogate Details - Select credit program - Check Approval - View Approval Details</td></tr>
+    <tr><td>7</td><td>11A-2</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Surrogate Details - Check Approval without Credit Program - Validation</td></tr>
+    <tr><td>8</td><td>11A-3</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Surrogate Details - RSA = Dealer + Reject Reason - Check Approval</td></tr>
+    <tr><td>9</td><td>11A-4</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Surrogate Details - RSA = FOS without Reject Reason - Validation</td></tr>
+    <tr><td>10</td><td>11A-5</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Surrogate Details - Check Approval without Bank Name - Validation</td></tr>
+  </tbody></table>
+
+  <div class="section-title">Module 12 - Approval Details <span class="badge">12_approvalDetails.spec.ts</span></div>
+  <table><thead><tr><th>S.No.</th><th>Test Case ID</th><th>Test Case Type</th><th>Description</th></tr></thead><tbody>
+    <tr><td>1</td><td>HB-1</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Approval Details - Proceed successfully</td></tr>
+    <tr><td>2</td><td>HB-2</td><td><span class="nh">Negative (Hamburger)</span></td><td>Hamburger - Approval Details - Verify None status behaviour</td></tr>
+    <tr><td>3</td><td>HB-3</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Approval Details - Not Approved state - Proceed</td></tr>
+    <tr><td>4</td><td>12A-1</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Approval Details - View details - Proceed</td></tr>
+    <tr><td>5</td><td>12A-2</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Approval Details - Verify approval state is visible on screen</td></tr>
+    <tr><td>6</td><td>12A-3</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Approval Details - Not Approved state - Proceed</td></tr>
+  </tbody></table>
+
+  <div class="section-title">Module 13 - Additional Details <span class="badge">13_additionalDetails.spec.ts</span></div>
+  <table><thead><tr><th>S.No.</th><th>Test Case ID</th><th>Test Case Type</th><th>Description</th></tr></thead><tbody>
+    <tr><td>1</td><td>HB-1</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Additional Details - Fill Personal and Office Details</td></tr>
+    <tr><td>2</td><td>HB-2</td><td><span class="nh">Negative (Hamburger)</span></td><td>Hamburger - Additional Details - Missing Time Horizon - Validation</td></tr>
+    <tr><td>3</td><td>E2E-1</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Additional Details - Fill Personal and Office Details - Proceed</td></tr>
+    <tr><td>4</td><td>E2E-2</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Additional Details - Missing Time Horizon - Validation</td></tr>
+    <tr><td>5</td><td>E2E-3</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Additional Details - Short Office Address - Validation</td></tr>
+    <tr><td>6</td><td>E2E-4</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Additional Details - Missing Mothers Name - Validation</td></tr>
+  </tbody></table>
+
+  <div class="section-title">Module 14 - Reappraisal <span class="badge">14_reappraisal.spec.ts</span></div>
+  <table><thead><tr><th>S.No.</th><th>Test Case ID</th><th>Test Case Type</th><th>Description</th></tr></thead><tbody>
+    <tr><td>1</td><td>HB-1</td><td><span class="nh">Negative (Hamburger)</span></td><td>Hamburger - Reappraisal - Proceed without selecting any reason - Validation</td></tr>
+    <tr><td>2</td><td>HB-2</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Reappraisal - Both reasons selected - Proceed</td></tr>
+    <tr><td>3</td><td>14A-1</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Reappraisal - Fill all required details - Proceed</td></tr>
+    <tr><td>4</td><td>14A-2</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Reappraisal - Missing required fields - Validation error</td></tr>
+    <tr><td>5</td><td>14A-3</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Reappraisal - Only Reappraisal Reason selected - Validation</td></tr>
+    <tr><td>6</td><td>14A-4</td><td><span class="ne">Negative (E2E)</span></td><td>E2E - Reappraisal - Only FOS Reason selected - Validation</td></tr>
+  </tbody></table>
+
+  <div class="section-title">Module 15 - Asset Cart <span class="badge">15_assetCart.spec.ts</span></div>
+  <table><thead><tr><th>S.No.</th><th>Test Case ID</th><th>Test Case Type</th><th>Description</th></tr></thead><tbody>
+    <tr><td>1</td><td>HB-1</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Asset Cart - Verify Opportunity ID and navigate</td></tr>
+    <tr><td>2</td><td>HB-2</td><td><span class="ph">Positive (Hamburger)</span></td><td>Hamburger - Asset Cart - Click Change Scheme</td></tr>
+    <tr><td>3</td><td>15A-1</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Asset Cart - Expand opportunity - Change Scheme</td></tr>
+    <tr><td>4</td><td>15A-2</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Asset Cart - Verify opportunity is listed</td></tr>
+    <tr><td>5</td><td>15A-3</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Asset Cart - Click Opportunity ID - Verify navigation</td></tr>
+    <tr><td>6</td><td>15A-4</td><td><span class="pe">Positive (E2E)</span></td><td>E2E - Asset Cart - Cancel Opportunity</td></tr>
+  </tbody></table>
+
+  <div class="sum-title">Summary - Test Count by Module</div>
+  <table class="sum"><thead><tr><th>S.No.</th><th>Module</th><th>HB Tests</th><th>A / E2E Tests</th><th>Total</th></tr></thead><tbody>
+    <tr><td>1</td><td>Surrogate Details (11)</td><td>5</td><td>5</td><td>10</td></tr>
+    <tr><td>2</td><td>Approval Details (12)</td><td>3</td><td>3</td><td>6</td></tr>
+    <tr><td>3</td><td>Additional Details (13)</td><td>2</td><td>4</td><td>6</td></tr>
+    <tr><td>4</td><td>Reappraisal (14)</td><td>2</td><td>4</td><td>6</td></tr>
+    <tr><td>5</td><td>Asset Cart (15)</td><td>2</td><td>4</td><td>6</td></tr>
+    <tr><td></td><td>TOTAL</td><td>14</td><td>20</td><td>34</td></tr>
+  </tbody></table>
+</div>
+<script>
+function downloadCSV() {
+  var rows = [
+    ["Module","S.No.","Test Case ID","Test Case Type","Description"],
+    ["Surrogate Details (11)","1","HB-1","Positive (Hamburger)","Hamburger - Bank Name + Credit Program + RSA = No - Check Approval"],
+    ["Surrogate Details (11)","2","HB-2","Positive (Hamburger)","Hamburger - Bank Name + RSA = FOS + Reject Reason - Check Approval"],
+    ["Surrogate Details (11)","3","HB-3","Positive (Hamburger)","Hamburger - Bank Name + RSA = Dealer + Reject Reason - Check Approval"],
+    ["Surrogate Details (11)","4","HB-4","Negative (Hamburger)","Hamburger - RSA = FOS without Reject Reason - Expect validation error"],
+    ["Surrogate Details (11)","5","HB-5","Negative (Hamburger)","Hamburger - Check Approval without Bank Name - Expect error"],
+    ["Surrogate Details (11)","6","11A-1","Positive (E2E)","E2E - Surrogate Details - Select credit program - Check Approval - View Approval Details"],
+    ["Surrogate Details (11)","7","11A-2","Negative (E2E)","E2E - Surrogate Details - Check Approval without Credit Program - Validation"],
+    ["Surrogate Details (11)","8","11A-3","Positive (E2E)","E2E - Surrogate Details - RSA = Dealer + Reject Reason - Check Approval"],
+    ["Surrogate Details (11)","9","11A-4","Negative (E2E)","E2E - Surrogate Details - RSA = FOS without Reject Reason - Validation"],
+    ["Surrogate Details (11)","10","11A-5","Negative (E2E)","E2E - Surrogate Details - Check Approval without Bank Name - Validation"],
+    ["Approval Details (12)","1","HB-1","Positive (Hamburger)","Hamburger - Approval Details - Proceed successfully"],
+    ["Approval Details (12)","2","HB-2","Negative (Hamburger)","Hamburger - Approval Details - Verify None status behaviour"],
+    ["Approval Details (12)","3","HB-3","Positive (Hamburger)","Hamburger - Approval Details - Not Approved state - Proceed"],
+    ["Approval Details (12)","4","12A-1","Positive (E2E)","E2E - Approval Details - View details - Proceed"],
+    ["Approval Details (12)","5","12A-2","Negative (E2E)","E2E - Approval Details - Verify approval state is visible on screen"],
+    ["Approval Details (12)","6","12A-3","Positive (E2E)","E2E - Approval Details - Not Approved state - Proceed"],
+    ["Additional Details (13)","1","HB-1","Positive (Hamburger)","Hamburger - Additional Details - Fill Personal and Office Details"],
+    ["Additional Details (13)","2","HB-2","Negative (Hamburger)","Hamburger - Additional Details - Missing Time Horizon - Validation"],
+    ["Additional Details (13)","3","E2E-1","Positive (E2E)","E2E - Additional Details - Fill Personal and Office Details - Proceed"],
+    ["Additional Details (13)","4","E2E-2","Negative (E2E)","E2E - Additional Details - Missing Time Horizon - Validation"],
+    ["Additional Details (13)","5","E2E-3","Negative (E2E)","E2E - Additional Details - Short Office Address - Validation"],
+    ["Additional Details (13)","6","E2E-4","Negative (E2E)","E2E - Additional Details - Missing Mothers Name - Validation"],
+    ["Reappraisal (14)","1","HB-1","Negative (Hamburger)","Hamburger - Reappraisal - Proceed without selecting any reason - Validation"],
+    ["Reappraisal (14)","2","HB-2","Positive (Hamburger)","Hamburger - Reappraisal - Both reasons selected - Proceed"],
+    ["Reappraisal (14)","3","14A-1","Positive (E2E)","E2E - Reappraisal - Fill all required details - Proceed"],
+    ["Reappraisal (14)","4","14A-2","Negative (E2E)","E2E - Reappraisal - Missing required fields - Validation error"],
+    ["Reappraisal (14)","5","14A-3","Negative (E2E)","E2E - Reappraisal - Only Reappraisal Reason selected - Validation"],
+    ["Reappraisal (14)","6","14A-4","Negative (E2E)","E2E - Reappraisal - Only FOS Reason selected - Validation"],
+    ["Asset Cart (15)","1","HB-1","Positive (Hamburger)","Hamburger - Asset Cart - Verify Opportunity ID and navigate"],
+    ["Asset Cart (15)","2","HB-2","Positive (Hamburger)","Hamburger - Asset Cart - Click Change Scheme"],
+    ["Asset Cart (15)","3","15A-1","Positive (E2E)","E2E - Asset Cart - Expand opportunity - Change Scheme"],
+    ["Asset Cart (15)","4","15A-2","Positive (E2E)","E2E - Asset Cart - Verify opportunity is listed"],
+    ["Asset Cart (15)","5","15A-3","Positive (E2E)","E2E - Asset Cart - Click Opportunity ID - Verify navigation"],
+    ["Asset Cart (15)","6","15A-4","Positive (E2E)","E2E - Asset Cart - Cancel Opportunity"]
+  ];
+  var csv = rows.map(function(r){return r.map(function(c){return '"'+c.replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'SFDC_POS_HB_A_Series_TestCases.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
