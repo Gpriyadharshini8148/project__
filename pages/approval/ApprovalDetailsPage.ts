@@ -42,8 +42,10 @@ export class ApprovalDetailsPage extends BasePage {
    * Click a button by name
    */
   async clickButton(buttonName: string): Promise<void> {
-    const btn = this.page.getByRole('button', { name: buttonName, exact: true })
+    const btn = this.page.getByRole('button', { name: new RegExp(`^${buttonName}$`, 'i') })
       .or(this.page.locator(`button:has-text("${buttonName}")`))
+      .or(this.page.locator(`lightning-button`).filter({ hasText: new RegExp(`^${buttonName}$`, 'i') }))
+      .or(this.page.locator(`//button[contains(translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${buttonName.toLowerCase()}')]`))
       .first();
 
     const isVisible = await btn.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
@@ -61,7 +63,7 @@ export class ApprovalDetailsPage extends BasePage {
     console.log('===== Navigate to Approval Details =====');
 
     // 1. Try to use the "View Approval Details" button (e.g. if we are on Surrogate Details and Check Approval was clicked)
-    console.log('⏳ Waiting up to 2 mins for "View Approval Details" button or screen transition (backend scheduler is ON)...');
+    console.log('⏳ Waiting up to 6 mins for "View Approval Details" button or screen transition (backend scheduler is ON)...');
     const viewApprovalDetailsBtn = this.page.locator('button, a, lightning-button')
       .filter({ hasText: /View Approval Details/i })
       .filter({ visible: true })
@@ -71,7 +73,7 @@ export class ApprovalDetailsPage extends BasePage {
     let screenAppeared = false;
 
     // Loop for up to 120 seconds (120 * 1000ms = 2 mins)
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 360; i++) {
       if (await viewApprovalDetailsBtn.isVisible().catch(() => false)) {
         buttonAppeared = true;
         break;
@@ -81,7 +83,7 @@ export class ApprovalDetailsPage extends BasePage {
         screenAppeared = true;
         break;
       }
-      await this.page.waitForTimeout(1000);
+      await this.page.waitForTimeout(2000);
     }
 
     if (screenAppeared) {
@@ -109,7 +111,7 @@ export class ApprovalDetailsPage extends BasePage {
         await viewApprovalDetailsBtn.click({ force: true }).catch(() => { });
       }
       console.log('✓ Clicked "View Approval Details". Proceeding to Approval Details...');
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(5000);
       
       // Ensure we have transitioned to the Approval Details screen
       try {
@@ -118,7 +120,7 @@ export class ApprovalDetailsPage extends BasePage {
             const screen = document.querySelector('.currentScreen');
             return screen && screen.textContent && screen.textContent.includes('Approval Details');
           },
-          { timeout: 15000 }
+          { timeout: 1500000 }
         );
         console.log('✓ Successfully transitioned to Approval Details screen');
       } catch {

@@ -27,17 +27,26 @@ export class AppStatusPage extends BasePage {
     const mobileValidatedText = this.page.getByText('Mobile Validated', { exact: false }).first()
       .or(this.page.getByText('Your Mobile Validation is Completed Successfully', { exact: false }).first());
 
-    const isMobileValidatedVisible = await mobileValidatedText.isVisible({ timeout: 15000 }).catch(() => false);
-    if (isMobileValidatedVisible) {
+    const expectedAppStatusHeading = this.page.locator('h1, h2, h3, .screen-title, .page-header, .slds-page-header__title, .cCenterPanel b, .cCenterPanel strong')
+      .filter({ hasText: new RegExp(expectedPageName, 'i') }).first();
+
+    const result = await Promise.race([
+      mobileValidatedText.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'mobile_validated').catch(() => null),
+      expectedAppStatusHeading.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'app_status').catch(() => null)
+    ]);
+
+    if (result === 'mobile_validated') {
       console.log('ℹ Mobile Validated screen detected — clicking Proceed to continue...');
       const proceedBtn = this.page.getByRole('button', { name: /proceed/i }).first();
       await proceedBtn.click({ force: true });
       await this.page.waitForTimeout(3000);
       console.log('✓ Proceeded past Mobile Validated screen');
+      await this.waitForAppStatusPage(expectedPageName);
+      await this.verifyCurrentScreen(expectedPageName);
+    } else {
+      await this.waitForAppStatusPage(expectedPageName);
+      await this.verifyCurrentScreen(expectedPageName);
     }
-
-    await this.waitForAppStatusPage(expectedPageName);
-    await this.verifyCurrentScreen(expectedPageName);
 
     await this.clickButton(buttonText);
     await this.checkForErrors();

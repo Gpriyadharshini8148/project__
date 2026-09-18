@@ -228,17 +228,7 @@ test.describe('E2E - Full Application Flow', () => {
 
       // Select RSA = No only; let Check Approval run the full wait+popup flow
       await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel']         || 'Process Type',
-        testData['processtypevalue']         || 'Normal',
-        testData['creditprogramlabel']       || 'Credit Program',
-        testData['creditprogramvalue']       || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        'RSA',
-        'No',
-        undefined,   // no RSA reject reason
-        undefined,   // no bank name
-        false        // stopAfterCheckApproval = false → wait for "Approved" popup + click "View Approval Details"
+        undefined, 'No', undefined, false
       );
 
       console.log('✓ Surrogate Details done — Approved popup handled, navigating to Approval Details');

@@ -98,7 +98,7 @@ export class ReappraisalPage extends BasePage {
         }
       }
     }
-    await this.page.locator("//div[contains(text(),'Reappraisal')]").first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+    await this.page.locator("//div[contains(text(),'Reappraisal')]").first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => { });
   }
 
   /**
@@ -115,27 +115,27 @@ export class ReappraisalPage extends BasePage {
 
     if (reappraisalReason) {
       console.log(`Selecting Reappraisal Reason: ${reappraisalReason}`);
-      
+
       // Use exact start regex to avoid matching "FOS Reappraisal Reason"
       const reasonCombo = this.page.locator('lightning-combobox')
         .filter({ has: this.page.locator('label', { hasText: /^Reappraisal Reason/ }) })
         .locator('button, input')
         .first();
-      
+
       if (await reasonCombo.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await reasonCombo.scrollIntoViewIfNeeded().catch(() => {});
+        await reasonCombo.scrollIntoViewIfNeeded().catch(() => { });
         await reasonCombo.click({ force: true });
         await this.page.waitForTimeout(500);
-        
+
         // Find option within the same lightning-combobox to avoid cross-talk
         const comboboxHost = this.page.locator('lightning-combobox').filter({ has: this.page.locator('label', { hasText: /^Reappraisal Reason/ }) });
         const optionLocator = comboboxHost.locator(`lightning-base-combobox-item:has-text("${reappraisalReason}"), [data-value="${reappraisalReason}"]`).first();
-        
+
         if (await optionLocator.isVisible().catch(() => false)) {
           await optionLocator.click({ force: true });
         } else {
-           await this.page.keyboard.press('ArrowDown');
-           await this.page.keyboard.press('Enter');
+          await this.page.keyboard.press('ArrowDown');
+          await this.page.keyboard.press('Enter');
         }
         console.log(`✓ Selected Reappraisal Reason: ${reappraisalReason}`);
       } else {
@@ -145,25 +145,25 @@ export class ReappraisalPage extends BasePage {
 
     if (fosReappraisalReason) {
       console.log(`Selecting FOS Reappraisal Reason: ${fosReappraisalReason}`);
-      
+
       const fosReasonCombo = this.page.locator('lightning-combobox')
         .filter({ has: this.page.locator('label', { hasText: /^FOS Reappraisal Reason/ }) })
         .locator('button, input')
         .first();
-      
+
       if (await fosReasonCombo.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await fosReasonCombo.scrollIntoViewIfNeeded().catch(() => {});
+        await fosReasonCombo.scrollIntoViewIfNeeded().catch(() => { });
         await fosReasonCombo.click({ force: true });
         await this.page.waitForTimeout(500);
-        
+
         const comboboxHost = this.page.locator('lightning-combobox').filter({ has: this.page.locator('label', { hasText: /^FOS Reappraisal Reason/ }) });
         const optionLocator = comboboxHost.locator(`lightning-base-combobox-item:has-text("${fosReappraisalReason}"), [data-value="${fosReappraisalReason}"]`).first();
 
         if (await optionLocator.isVisible().catch(() => false)) {
           await optionLocator.click({ force: true });
         } else {
-           await this.page.keyboard.press('ArrowDown');
-           await this.page.keyboard.press('Enter');
+          await this.page.keyboard.press('ArrowDown');
+          await this.page.keyboard.press('Enter');
         }
         console.log(`✓ Selected FOS Reappraisal Reason: ${fosReappraisalReason}`);
       } else {

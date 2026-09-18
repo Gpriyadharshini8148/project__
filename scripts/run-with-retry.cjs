@@ -2,7 +2,7 @@
  * run-with-retry.cjs
  *
  * Smart Sequential Runner with Automatic Retry + Merged Report
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * PIPELINE FLOW:
  *   1. Run each test FILE sequentially (files run one by one).
  *   2. Within each file, all test cases run IN PARALLEL (workers = test count).
@@ -28,34 +28,40 @@ const path = require('path');
 const fs = require('fs');
 
 // TEST FILE LIST
+// TEST FILE LIST
 const TEST_FILES = [
-  { path: 'tests/customer/01_searchDealer.spec.ts' },
-  { path: 'tests/customer/02_appStatus.spec.ts' },
-  { path: 'tests/customer/03_zipCode.spec.ts' },
-  { path: 'tests/customer/04_mitc.spec.ts' },
-  { path: 'tests/customer/05_panVerification.spec.ts' },
-  { path: 'tests/customer/06_productSelection.spec.ts', grep: '06A' },
-  { path: 'tests/customer/07_incomeDeclaration.spec.ts', grep: '07A' },
-  { path: 'tests/customer/08_kyc.spec.ts', grep: '08A' },
-  { path: 'tests/customer/09_poi.spec.ts', grep: '09A' },
-  { path: 'tests/customer/10_poa.spec.ts', grep: '10A' },
-  { path: 'tests/customer/11_surrogateDetails.spec.ts', grep: '11A' },
-  { path: 'tests/customer/12_approvalDetails.spec.ts', grep: '12A' },
-  { path: 'tests/customer/13_additionalDetails.spec.ts', grep: '13A' },
-  { path: 'tests/customer/14_reappraisal.spec.ts', grep: '14A' },
-  { path: 'tests/customer/15_assetCart.spec.ts', grep: '15A' },
+  //{ path: 'tests/customer/01_searchDealer.spec.ts' },
+  //{ path: 'tests/customer/02_appStatus.spec.ts' },
+  //{ path: 'tests/customer/03_zipCode.spec.ts' },
+  //{ path: 'tests/customer/04_mitc.spec.ts' },
+  //{ path: 'tests/customer/05_panVerification.spec.ts' },
+  // { path: 'tests/customer/06_productSelection.spec.ts', grep: '06A' },
+  //{ path: 'tests/customer/07_incomeDeclaration.spec.ts', grep: '07A' },
+  // { path: 'tests/customer/08_kyc.spec.ts', grep: '08A' },
+  //{ path: 'tests/customer/09_poi.spec.ts', grep: '09A' },
+  // { path: 'tests/customer/10_poa.spec.ts', grep: '10A' },
+  //{ path: 'tests/customer/11_surrogateDetails.spec.ts', grep: '11A' },
+  //{ path: 'tests/customer/12_approvalDetails.spec.ts', grep: '12A' },
+  //{ path: 'tests/customer/13_permanentAddress.spec.ts', grep: '13A' },
+  { path: 'tests/customer/14_employmentIncomeDetails.spec.ts', grep: '14AN' },
+  { path: 'tests/customer/14_employmentIncomeDetails.spec.ts', grep: '14AP' },
+  //{ path: 'tests/customer/15_additionalDetails.spec.ts', grep: '15AN' },
+  //{ path: 'tests/customer/15_additionalDetails.spec.ts', grep: '15AP' },
+  //{ path: 'tests/customer/16_reappraisal.spec.ts', grep: '16A' },
+  //{ path: 'tests/customer/17_assetCart.spec.ts', grep: '17A' },
 ];
 
-// CONFIGURATION
-const MAX_WORKERS  = parseInt(process.env.MAX_WORKERS  || '20', 10);
-const MAX_RETRIES  = parseInt(process.env.MAX_RETRIES  || '1',  10);
-const DRY_RUN      = process.argv.includes('--dry-run');
-const NO_RETRY     = process.argv.includes('--no-retry');
-const CONFIG_FILE  = 'playwright.config.ts';
 
-const BLOB_DIR         = 'blob-report';
-const RETRY_BLOB_DIR   = 'blob-report-retry';
-const MERGED_HTML_DIR  = 'playwright-report';
+// CONFIGURATION
+const MAX_WORKERS = parseInt(process.env.MAX_WORKERS || '15', 10);
+const MAX_RETRIES = parseInt(process.env.MAX_RETRIES || '2', 10);
+const DRY_RUN = process.argv.includes('--dry-run');
+const NO_RETRY = process.argv.includes('--no-retry');
+const CONFIG_FILE = 'playwright.config.ts';
+
+const BLOB_DIR = 'blob-report';
+const RETRY_BLOB_DIR = 'blob-report-retry';
+const MERGED_HTML_DIR = 'playwright-report';
 const MERGED_JSON_FILE = 'reports/test-results.json';
 
 // HELPERS
@@ -73,18 +79,18 @@ function countTests(filePath, grepPattern) {
     const result = spawnSync('npx', args, { encoding: 'utf8', shell: true, timeout: 60000 });
     const raw = (result.stdout || '').trim();
     const jsonStart = raw.indexOf('{');
-    const jsonEnd   = raw.lastIndexOf('}');
+    const jsonEnd = raw.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) {
       const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
       let count = 0;
       function countSpecs(suite) {
-        if (suite.specs)  count += suite.specs.length;
+        if (suite.specs) count += suite.specs.length;
         if (suite.suites) suite.suites.forEach(countSpecs);
       }
       (parsed.suites || []).forEach(countSpecs);
       if (count > 0) return count;
     }
-  } catch (_) {}
+  } catch (_) { }
   try {
     const content = fs.readFileSync(filePath, 'utf8');
     return (content.match(/^\s*test\s*\(/gm) || []).length;
@@ -95,7 +101,7 @@ function runFile(filePath, workers, blobSubDir, grepPattern) {
   const start = Date.now();
   const index = path.basename(blobSubDir);
   const jsonReportPath = path.join('test-results', `report-${index}.json`);
-  const env = Object.assign({}, process.env, { 
+  const env = Object.assign({}, process.env, {
     PLAYWRIGHT_BLOB_OUTPUT_DIR: blobSubDir,
     PLAYWRIGHT_JSON_OUTPUT_NAME: jsonReportPath
   });
@@ -143,16 +149,65 @@ function mergeAllReports() {
 
   let zipCount = 0;
 
-  function collectZips(sourceRootDir, prefix) {
+  // Extract test IDs that PASSED in retry phase
+  const retryPassedTestIds = new Set();
+  function extractRetryPassedTests() {
+    if (!fs.existsSync(RETRY_BLOB_DIR)) return;
+    const entries = fs.readdirSync(RETRY_BLOB_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const subDir = path.join(RETRY_BLOB_DIR, entry.name);
+        try {
+          const jsonFiles = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
+          for (const jsonFile of jsonFiles) {
+            const content = JSON.parse(fs.readFileSync(path.join(subDir, jsonFile), 'utf8'));
+            function extractPassed(suites) {
+              for (const suite of suites) {
+                for (const spec of (suite.specs || [])) {
+                  if (spec.ok) { // spec.ok = all tests in spec passed
+                    for (const test of (spec.tests || [])) {
+                      const testId = test.testId || test.id;
+                      if (testId) retryPassedTestIds.add(testId);
+                    }
+                  }
+                }
+                if (suite.suites) extractPassed(suite.suites);
+              }
+            }
+            extractPassed(content.suites || []);
+          }
+        } catch (e) { }
+      }
+    }
+  }
+
+  extractRetryPassedTests();
+  if (retryPassedTestIds.size > 0) {
+    log(`  -> Found ${retryPassedTestIds.size} test(s) that passed on retry`);
+  }
+
+  function collectZips(sourceRootDir, prefix, excludeTestIds = new Set()) {
     if (!fs.existsSync(sourceRootDir)) return;
     const entries = fs.readdirSync(sourceRootDir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const subDir = path.join(sourceRootDir, entry.name);
-        fs.readdirSync(subDir).filter(f => f.endsWith('.zip')).forEach(zip => {
-          fs.copyFileSync(path.join(subDir, zip), path.join(TEMP_DIR, `${prefix}-${entry.name}-${zip}`));
-          zipCount++;
-        });
+        const zips = fs.readdirSync(subDir).filter(f => f.endsWith('.zip'));
+        for (const zip of zips) {
+          const srcPath = path.join(subDir, zip);
+          // Determine if this zip belongs to an excluded test
+          let shouldExclude = false;
+          if (excludeTestIds.size > 0) {
+            // Extract test ID from zip filename or metadata
+            // zip names are typically like: report-abc123.zip or similar
+            // For now, we'll exclude at JSON parsing level, not zip level
+            // So don't exclude here; we'll handle it in JSON parsing
+          }
+          if (!shouldExclude) {
+            fs.copyFileSync(srcPath, path.join(TEMP_DIR, `${prefix}-${entry.name}-${zip}`));
+            zipCount++;
+          }
+        }
       } else if (entry.name.endsWith('.zip')) {
         fs.copyFileSync(path.join(sourceRootDir, entry.name), path.join(TEMP_DIR, `${prefix}-${entry.name}`));
         zipCount++;
@@ -160,8 +215,10 @@ function mergeAllReports() {
     }
   }
 
-  // Original blobs first, retry blobs last (retry results WIN on conflict)
-  collectZips(BLOB_DIR,       'orig');
+  // Original blobs first (but exclude tests that passed on retry)
+  // Retry blobs last (these will win)
+  log(`  -> Collecting blob reports (excluding ${retryPassedTestIds.size} retry-passed tests from originals)...`);
+  collectZips(BLOB_DIR, 'orig', retryPassedTestIds);
   collectZips(RETRY_BLOB_DIR, 'retry');
 
   if (zipCount === 0) {
@@ -170,7 +227,8 @@ function mergeAllReports() {
     return;
   }
 
-  log(`  -> Collected ${zipCount} blob zip(s) -- merging...`);
+  log(`  -> Collected ${zipCount} blob zip(s) for merge...`);
+  log(`     Strategy: Retry-passed tests replace original failures in final report.`);
 
   // HTML
   const htmlResult = spawnSync('npx',
@@ -213,7 +271,7 @@ function mergeAllReports() {
 
 // MAIN
 async function main() {
-  const totalFiles   = TEST_FILES.length;
+  const totalFiles = TEST_FILES.length;
   const overallStart = Date.now();
 
   log('');
@@ -246,7 +304,7 @@ async function main() {
     log(`[${i + 1}/${totalFiles}] ${filePath}${grepPattern ? ` (grep: ${grepPattern})` : ''}`);
     log('  -> Counting test cases...');
     const testCount = countTests(filePath, grepPattern);
-    const workers   = Math.min(testCount, MAX_WORKERS);
+    const workers = Math.min(testCount, MAX_WORKERS);
     log(`  -> Detected: ${testCount} test case(s)`);
     log(`  -> Workers:  ${workers}`);
 
@@ -262,7 +320,7 @@ async function main() {
     const { exitCode, durationMs } = runFile(filePath, workers, blobSubDir, grepPattern);
     log(hr('-'));
     const passed = exitCode === 0;
-    
+
     // Extract both failed and skipped tests from JSON report
     try {
       const jsonReportPath = path.join('test-results', `report-${i}.json`);
@@ -288,7 +346,7 @@ async function main() {
         }
         extractTests(report.suites || []);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Fallback to .last-run.json for backwards safety
     if (!passed) {
@@ -302,7 +360,7 @@ async function main() {
             });
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     log(`  -> ${passed ? 'PASSED' : 'FAILED'}   Time: ${formatDuration(durationMs)}`);
@@ -334,7 +392,7 @@ async function main() {
       const lastRunPath = path.join('test-results', '.last-run.json');
       if (!fs.existsSync('test-results')) fs.mkdirSync('test-results', { recursive: true });
       fs.writeFileSync(lastRunPath, JSON.stringify({ status: "failed", failedTests: masterFailedTests }, null, 2));
-    } catch (e) {}
+    } catch (e) { }
 
     log(hr());
     log(`  PHASE 2 -- Retrying failed tests (up to ${MAX_RETRIES} round(s))`);

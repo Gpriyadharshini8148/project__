@@ -137,60 +137,14 @@ export class SurrogateDetailsPage extends BasePage {
 
 
   async selectSurrogateDetails(
-    expectedValue: string,
-    processTypeLabel: string,
-    processTypeValue: string,
-    creditProgramLabel: string,
-    creditProgramValue: string,
-    checkApprovalButtonLabel: string,
-    rsaLabel?: string,
+    bankName?: string,
     rsaValue?: string,
     rsaRejectReason?: string,
-    bankName?: string,
-    stopAfterCheckApproval: boolean = false
+    stopAfterCheckApproval: boolean = false,
+    clickProceed: boolean = false
   ): Promise<void> {
     console.log('===== Complete the Surrogate Details =====');
 
-    // Select Credit Program if visible
-    if (creditProgramLabel && creditProgramValue) {
-      console.log(`Selecting Credit Program: ${creditProgramValue}`);
-      // Check for <select> and LWC <lightning-combobox> or a button/input following the h1/label
-      const cpSelect = this.page.locator(
-        "//select[contains(@name, 'credit')] | " +
-        "//h1[contains(text(),'Credit Program')]/following-sibling::*//button | " +
-        "//h1[contains(text(),'Credit Program')]/following-sibling::*//input | " +
-        "//h1[contains(text(),'Credit Program')]/following-sibling::*//select | " +
-        "//label[contains(text(),'Credit Program')]/..//select | " +
-        "//div[contains(text(),'Credit Program')]/..//select | " +
-        "//lightning-combobox[.//label[contains(text(), 'Credit Program')]]//button | " +
-        "//lightning-combobox[.//label[contains(text(), 'Credit Program')]]//input"
-      ).first();
-
-      const isCpVisible = await cpSelect.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
-      if (isCpVisible) {
-        const tagName = await cpSelect.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
-        if (tagName === 'select') {
-          await cpSelect.selectOption({ label: creditProgramValue }).catch(async () => {
-            await cpSelect.selectOption({ index: 1 }).catch(() => { });
-          });
-        } else {
-          // LWC combobox fallback
-          await cpSelect.scrollIntoViewIfNeeded().catch(() => { });
-          await cpSelect.click({ force: true });
-          await this.page.waitForTimeout(1000);
-          const optionItem = this.page.locator(`//lightning-base-combobox-item//span[contains(text(),'${creditProgramValue.substring(0, 4)}')] | //*[role="option"]//*[contains(text(),'${creditProgramValue.substring(0, 4)}')] | //*[role="option" and contains(@data-value, '${creditProgramValue.substring(0, 4)}')]`).filter({ visible: true }).first();
-          if (await optionItem.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await optionItem.scrollIntoViewIfNeeded().catch(() => { });
-            await optionItem.click({ force: true });
-          } else {
-            await this.page.keyboard.press(creditProgramValue.charAt(0));
-            await this.page.keyboard.press('Enter');
-          }
-        }
-      } else {
-        console.log('⚠ Credit Program combobox/select was not visible');
-      }
-    }
 
     // Select RSA & Reject Reason if provided
     if (rsaValue) {
@@ -200,20 +154,18 @@ export class SurrogateDetailsPage extends BasePage {
     // Automatically attempt to select Bank Name if it exists on the screen, as it's mandatory on some variants
     await this.selectBankName(bankName || 'Axis Bank');
 
-    // Step 1: Click the appropriate button (Check Approval or Proceed)
-    if (checkApprovalButtonLabel && checkApprovalButtonLabel.trim().toLowerCase() === 'proceed') {
-      console.log('===== Clicking Proceed (Reappraisal flow) =====');
-      await this.clickButton('Proceed');
-    } else {
-      await this.clickCheckApproval(stopAfterCheckApproval);
-    }
+    // Step 1: Click the Check Approval button
+    await this.clickCheckApproval(stopAfterCheckApproval);
 
     // Check for errors after button click
     await this.checkForErrors();
 
     // Step 2: Click Proceed
     // Per user request, do not click proceed here because the "Approved" popup already navigates
-    // await this.clickProceed();
+    // However, if clickProceed is explicitly true, click it.
+    if (clickProceed) {
+      await this.clickProceed();
+    }
   }
 
   /**
@@ -223,10 +175,29 @@ export class SurrogateDetailsPage extends BasePage {
   async clickCheckApproval(isNegativeTest: boolean = false): Promise<boolean> {
     console.log('===== Clicking Check Approval =====');
     const checkBtn = this.page.getByRole('button', { name: 'Check Approval' })
-      .or(this.page.locator('button, lightning-button').filter({ hasText: /Check Approval/i })).first();
+      .or(this.page.locator('button, lightning-button').filter({ hasText: /Check Approval/i }))
+      .or(this.page.locator('button:has-text("Check Approval")'))
+      .or(this.page.locator('//button[contains(normalize-space(.), "Check Approval")]'))
+      .or(this.page.locator('//lightning-button[contains(normalize-space(.), "Check Approval")]//button'))
+      .filter({ visible: true }).first();
 
     // Wait up to 20 seconds because button might take time to render after selections
-    const isCheckBtnVisible = await checkBtn.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+    const isCheckBtnVisible = await checkBtn.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(async () => {
+      // Debugging: If it fails, let's log what buttons ARE visible on the page
+      console.log('⚠ Debug: Check Approval button not found. Dumping visible buttons:');
+      try {
+        const buttons = this.page.locator('button');
+        const count = await buttons.count();
+        for (let i = 0; i < count; i++) {
+          if (await buttons.nth(i).isVisible()) {
+            console.log(`Visible button: [${await buttons.nth(i).innerText()}]`);
+          }
+        }
+      } catch (e) {
+        console.log('Could not dump buttons:', e);
+      }
+      return false;
+    });
     if (isCheckBtnVisible) {
       await checkBtn.scrollIntoViewIfNeeded().catch(() => { });
 
@@ -285,6 +256,35 @@ export class SurrogateDetailsPage extends BasePage {
     }
   }
 
+  private async selectNativeRobust(selectLocator: any, targetValue: string, labelText: string): Promise<boolean> {
+    try {
+      await selectLocator.selectOption({ label: targetValue }, { timeout: 2000 });
+      console.log(`✓ [${labelText}] selected natively (label): ${targetValue}`);
+      return true;
+    } catch {
+      try {
+        await selectLocator.selectOption({ value: targetValue }, { timeout: 2000 });
+        console.log(`✓ [${labelText}] selected natively (value): ${targetValue}`);
+        return true;
+      } catch {
+        try {
+          const options = await selectLocator.locator('option').all();
+          const regex = new RegExp(`^${targetValue}$`, 'i');
+          for (const opt of options) {
+            const textContent = (await opt.textContent())?.trim() || '';
+            const valueAttr = (await opt.getAttribute('value'))?.trim() || '';
+            if (regex.test(textContent) || regex.test(valueAttr)) {
+              await selectLocator.selectOption({ value: valueAttr });
+              console.log(`✓ [${labelText}] selected natively (regex match): ${targetValue}`);
+              return true;
+            }
+          }
+        } catch { /* ignore */ }
+      }
+    }
+    return false;
+  }
+
   /**
    * Select RSA Option and optional RSA Reject Reason
    * Uses the same h1-based XPath pattern as BasePage.labelSelect (mirrors POI Type / POA Type).
@@ -292,34 +292,44 @@ export class SurrogateDetailsPage extends BasePage {
    */
   async selectRsaDetails(rsaValue: string, rejectReason?: string): Promise<void> {
     console.log(`===== Selecting RSA: ${rsaValue} =====`);
-    await this.selectLwcDropdown('RSA', rsaValue, /* excludeLabel= */ 'Reason');
+
+    // Check direct ID first (handle dynamic suffix)
+    const directSelect = this.page.locator("select[id^='dealer-select2-']");
+    if (await directSelect.isVisible({ timeout: 500 }).catch(() => false)) {
+      await this.selectNativeRobust(directSelect, rsaValue, 'RSA Direct ID');
+    } else {
+      await this.selectLwcDropdown('RSA', rsaValue, /* excludeLabel= */ 'Reason');
+    }
 
     if (rejectReason) {
       console.log(`===== Selecting RSA Reject Reason: ${rejectReason} =====`);
+      // Wait dynamically for either the direct ID or fallback field to appear, instead of hard timeout
+      const directReasonSelectLoc = this.page.locator("select[id^='dealer-select3-']");
+      const fallbackReason = this.page.locator(`//div//h1[contains(normalize-space(text()),'Reason')]//..//select | //lightning-combobox[.//label[contains(normalize-space(text()),'Reason')]]//button`);
+      await directReasonSelectLoc.or(fallbackReason).first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => { });
 
-      // RSA Reject Reason renders DYNAMICALLY after RSA value is chosen.
-      // Wait up to 1 s for the field to appear before trying to select it.
-      // The field might be labeled "RSA Reject Reason" or just "Reason".
-      const rejectReasonField = this.page.locator(
-        `//div//h1[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]//..//select | ` +
-        `//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]/..//select | ` +
-        `//lightning-combobox[.//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]]//button | ` +
-        `//div[contains(@class,'slds-form-element')][.//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]]//button`
-      ).first();
-
-      const appeared = await rejectReasonField
-        .waitFor({ state: 'visible', timeout: 1000 })
-        .then(() => true)
-        .catch(() => false);
-
-      if (!appeared) {
-        console.log(`⚠ RSA Reject Reason field did not appear after RSA="${rsaValue}" — skipping`);
+      if (await directReasonSelectLoc.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await this.selectNativeRobust(directReasonSelectLoc, rejectReason, 'RSA Reject Reason Direct ID');
       } else {
-        // We know it appeared, try to select it via the wrapper method (checking both labels)
-        try {
-          await this.selectLwcDropdown('RSA Reject Reason', rejectReason);
-        } catch {
-          await this.selectLwcDropdown('Reason', rejectReason);
+        const rejectReasonField = this.page.locator(
+          `//div//h1[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]//..//select | ` +
+          `//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]/..//select | ` +
+          `//lightning-combobox[.//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]]//button | ` +
+          `//div[contains(@class,'slds-form-element')][.//label[contains(normalize-space(text()),'Reject Reason') or contains(normalize-space(text()),'Reason')]]//button`
+        ).first();
+
+        const appeared = await rejectReasonField
+          .waitFor({ state: 'visible', timeout: 5000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (!appeared) {
+          console.log(`⚠ RSA Reject Reason field did not appear after RSA="${rsaValue}" — skipping`);
+        } else {
+          let success = await this.selectLwcDropdown('RSA Reject Reason', rejectReason);
+          if (!success) {
+            await this.selectLwcDropdown('Reason', rejectReason);
+          }
         }
       }
     }
@@ -338,9 +348,9 @@ export class SurrogateDetailsPage extends BasePage {
    * @param value       Option to select
    * @param excludeLabel  If set, the matched label element must NOT contain this text
    */
-  protected async selectLwcDropdown(label: string, value: string, excludeLabel?: string): Promise<void> {
-    if (!value || !value.trim()) return;
-    await this.page.waitForTimeout(500);
+  protected async selectLwcDropdown(label: string, value: string, excludeLabel?: string): Promise<boolean> {
+    if (!value || !value.trim()) return false;
+    // Removed 500ms hard sleep to fill instantly
 
     // Build the XPath not() fragment once and reuse in all 3 strategies.
     // This checks only the label element's own text — NOT the parent container
@@ -355,18 +365,8 @@ export class SurrogateDetailsPage extends BasePage {
       `//h1[normalize-space(text())='${label}'${notPart}]//..//select | ` +
       `//h1[contains(normalize-space(text()),'${label}')${notPart}]//..//select`
     ).first();
-    if (await h1Select.isVisible({ timeout: 500 }).catch(() => false)) {
-      try {
-        await h1Select.selectOption({ label: value });
-        console.log(`✓ [${label}] selected via h1 native <select> (label): ${value}`);
-        return;
-      } catch {
-        try {
-          await h1Select.selectOption({ value });
-          console.log(`✓ [${label}] selected via h1 native <select> (value): ${value}`);
-          return;
-        } catch { /* fall through */ }
-      }
+    if (await h1Select.isVisible({ timeout: 100 }).catch(() => false)) {
+      if (await this.selectNativeRobust(h1Select, value, `${label} (h1)`)) return true;
     }
 
     // ── Strategy 2: native <select> via <label> tag ──
@@ -375,18 +375,8 @@ export class SurrogateDetailsPage extends BasePage {
     const labelSelect = this.page.locator(
       `//label[contains(normalize-space(text()),'${label}')${notPart}]/..//select`
     ).first();
-    if (await labelSelect.isVisible({ timeout: 500 }).catch(() => false)) {
-      try {
-        await labelSelect.selectOption({ label: value });
-        console.log(`✓ [${label}] selected via <label> native <select> (label): ${value}`);
-        return;
-      } catch {
-        try {
-          await labelSelect.selectOption({ value });
-          console.log(`✓ [${label}] selected via <label> native <select> (value): ${value}`);
-          return;
-        } catch { /* fall through */ }
-      }
+    if (await labelSelect.isVisible({ timeout: 100 }).catch(() => false)) {
+      if (await this.selectNativeRobust(labelSelect, value, `${label} (<label>)`)) return true;
     }
 
     // ── Strategy 3: LWC lightning-combobox (click button, then pick visible option) ──
@@ -395,17 +385,16 @@ export class SurrogateDetailsPage extends BasePage {
       `//div[contains(@class,'slds-form-element')][.//label[contains(normalize-space(text()),'${label}')${notPart}]]//button`
     ).first();
 
-      if (await lwcBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await lwcBtn.isVisible({ timeout: 100 }).catch(() => false)) {
       await lwcBtn.scrollIntoViewIfNeeded().catch(() => { });
-      // Ensure focus is given so keyboard fallback works if needed
       await lwcBtn.focus().catch(() => { });
       await lwcBtn.click({ force: true });
-      await this.page.waitForTimeout(800);
+      await this.page.waitForTimeout(300); // reduced from 800ms
 
       // Try Playwright's built-in locator that pierces shadow DOM first
       let option = this.page.getByRole('option', { name: new RegExp(`^${value}$`, 'i') }).first();
       let optionVisible = await option.isVisible({ timeout: 1000 }).catch(() => false);
-      
+
       if (!optionVisible) {
         // Fallback to the explicit XPaths
         option = this.page.locator(
@@ -413,26 +402,27 @@ export class SurrogateDetailsPage extends BasePage {
           `//lightning-base-combobox-item[.//*[normalize-space(text())='${value}']] | ` +
           `//*[@role='option'][@data-value='${value}']`
         ).filter({ visible: true }).first();
-        optionVisible = await option.isVisible({ timeout: 1000 }).catch(() => false);
+        optionVisible = await option.isVisible({ timeout: 200 }).catch(() => false);
       }
 
       if (optionVisible) {
         await option.scrollIntoViewIfNeeded().catch(() => { });
         await option.click({ force: true });
         console.log(`✓ [${label}] selected via LWC combobox option: ${value}`);
-        return;
+        return true;
       }
 
       // Keyboard fallback - now with guaranteed focus
       console.log(`⚠ Option not found in DOM, trying keyboard fallback for: ${value}`);
       await this.page.keyboard.press(value.charAt(0));
-      await this.page.waitForTimeout(400);
+      await this.page.waitForTimeout(100);
       await this.page.keyboard.press('Enter');
       console.log(`✓ [${label}] selected via keyboard fallback: ${value}`);
-      return;
+      return true;
     }
 
     console.log(`⚠ [${label}] dropdown not found — skipping selection of "${value}"`);
+    return false;
   }
 
   /**
@@ -441,21 +431,26 @@ export class SurrogateDetailsPage extends BasePage {
   async selectBankName(bankName: string): Promise<void> {
     console.log(`===== Selecting Customer Bank Name: ${bankName} =====`);
 
+    // Priority 1: Direct ID provided by user (handle dynamic suffix)
+    const directSelect = this.page.locator("select[id^='dealer-select-']");
+    if (await directSelect.isVisible({ timeout: 100 }).catch(() => false)) {
+      await this.selectNativeRobust(directSelect, bankName, 'Customer Bank Name Direct ID');
+      return;
+    }
+
+    // Priority 2: Fallback logic
     const bankSelect = this.page.locator("//label[contains(text(),'Customer Bank Name')]/..//select | //div[contains(text(),'Customer Bank Name')]/..//select | select[name*='bank']").first();
-    if (await bankSelect.isVisible({ timeout: 500 }).catch(() => false)) {
-      await bankSelect.selectOption({ label: bankName }).catch(async (e) => {
-        console.log(`⚠ Failed to select Bank natively by label. Error: ${e.message}`);
-        await bankSelect.selectOption({ value: bankName }).catch(() => { });
-      });
-      console.log(`✓ Selected Customer Bank Name native select: ${bankName}`);
+    if (await bankSelect.isVisible({ timeout: 100 }).catch(() => false)) {
+      const success = await this.selectNativeRobust(bankSelect, bankName, 'Customer Bank Name');
+      if (!success) console.log(`⚠ Failed to select Bank natively by label, value, or regex.`);
     } else {
       const bankCombo = this.page.locator('lightning-combobox').filter({ hasText: 'Customer Bank Name' }).locator('button, input').first();
-      const isComboVisible = await bankCombo.isVisible({ timeout: 500 }).catch(() => false);
+      const isComboVisible = await bankCombo.isVisible({ timeout: 100 }).catch(() => false);
 
       if (isComboVisible) {
         await bankCombo.scrollIntoViewIfNeeded().catch(() => { });
         await bankCombo.click({ force: true });
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(300);
 
         // Find visible option globally
         const optionItem = this.page.locator(`//lightning-base-combobox-item//span[text()='${bankName}'] | //*[role="option"]//*[text()='${bankName}'] | //*[role="option" and @data-value="${bankName}"]`).filter({ visible: true }).first();

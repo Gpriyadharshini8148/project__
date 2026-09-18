@@ -3,13 +3,13 @@
  * Generates random test data like mobile numbers, PAN, Aadhar, names, etc.
  */
 export class DataGenerator {
-  
+
   /**
    * Generate a random 10-digit Indian mobile number starting with 6, 7, or 8
    */
   static generateMobileNumber(): string {
     const firstDigit = Math.floor(Math.random() * 3) + 6; // 6, 7, or 8
-    const remaining = Array.from({ length: 9 }, () => 
+    const remaining = Array.from({ length: 9 }, () =>
       Math.floor(Math.random() * 10)
     ).join('');
     return `${firstDigit}${remaining}`;
@@ -22,7 +22,7 @@ export class DataGenerator {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
     const rand = (str: string) => str[Math.floor(Math.random() * str.length)];
-    
+
     return [
       rand(letters), rand(letters), rand(letters), 'P', rand(letters),
       rand(numbers), rand(numbers), rand(numbers), rand(numbers),
@@ -41,7 +41,7 @@ export class DataGenerator {
    * Generate a random 12-digit full Aadhar number
    */
   static generateFullAadharNumber(): string {
-    return Array.from({ length: 12 }, () => 
+    return Array.from({ length: 12 }, () =>
       Math.floor(Math.random() * 10)
     ).join('');
   }
@@ -157,7 +157,7 @@ export class DataGenerator {
    * Generate Deal ID (format: CS + 8 random digits)
    */
   static generateDealID(): string {
-    const digits = Array.from({ length: 8 }, () => 
+    const digits = Array.from({ length: 8 }, () =>
       Math.floor(Math.random() * 10)
     ).join('');
     return `CS${digits}`;
@@ -273,7 +273,7 @@ export class DataGenerator {
     const now = new Date();
     const date = now.toISOString().split('T')[0];
     const time = now.toTimeString().split(' ')[0];
-    
+
     switch (format) {
       case 'date': return date;
       case 'time': return time;

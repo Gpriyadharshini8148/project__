@@ -1,0 +1,74 @@
+LABELS AND HEADINGS:
+Search...
+KYC Mode
+
+Identity Document Type (OVD Type)
+e-KYC UIDAI Last 4 Digits
+Personal Details
+ POI Changed  
+ Is Single Name  
+First Name *
+Middle Name
+Last Name *
+Gender *
+Date of Birth *
+Employment Type *
+Officially Valid Documents
+OVD Type *
+OVD Type Number
+
+FULL PAGE TEXT:
+Skip to Navigation
+Skip to Main Content
+Search...
+Notifications
+User16705688918238410763
+Home
+Search
+Customer
+Opportunity
+Back
+
+Dummycust Doe
+
+A147821235
+
+...
+>
+Officially Valid Documents
+KYC Mode
+Identity Document Type (OVD Type)
+e-KYC UIDAI Last 4 Digits
+Personal Details
+ POI Changed  
+ Is Single Name  
+First Name *
+Middle Name
+Last Name *
+Gender *
+Male
+Male
+Female
+Third Gender
+Date of Birth *
+Employment Type *
+Select Employment Type
+Salaried
+Self Employed
+Self Employed Professional
+Pensioner
+Housewife
+Student
+Farmer
+Others
+Officially Valid Documents
+OVD Type *
+Select OVD Type
+Aadhaar
+Voter ID
+Passport
+Driving License
+Job Card Issue by NREGA
+OVD Type Number *
+Proceed
+Customer: Dummycust

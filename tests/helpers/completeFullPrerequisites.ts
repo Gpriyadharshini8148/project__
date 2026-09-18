@@ -21,7 +21,7 @@ export const getVal = (val: string | undefined, def: string) =>
 export async function completeFullPrerequisites(
   context: any,
   testData: Record<string, string>,
-  options?: { stopAfter?: 'appStatus' | 'pan' | 'productSelection' | 'income' | 'kyc' | 'poi' | 'poa' | 'surrogate' | 'approval' | 'additional', forceZipCode?: boolean }
+  options?: { stopAfter?: 'appStatus' | 'pan' | 'productSelection' | 'income' | 'kyc' | 'poi' | 'poa' | 'surrogate' | 'approval' | 'additional', forceZipCode?: boolean, clickProceedInSurrogate?: boolean }
 ): Promise<void> {
   const {
     page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
@@ -52,15 +52,15 @@ export async function completeFullPrerequisites(
       try {
         const hamburgerBtn = page.locator("//button[@class='breadcrumb-button' and contains(normalize-space(text()),'...')]").first()
           .or(page.locator("//button[@class='breadcrumb-button']").last());
-        
+
         if (await hamburgerBtn.count() > 0) {
-           await hamburgerBtn.click({ force: true }).catch(() => {});
-           await page.waitForTimeout(1000);
-           const appStatusMenu = page.locator("//a/span[contains(text(),'App Status')] | //button[contains(text(),'App Status')] | //a/span[contains(text(),'Application Status')] | //button[contains(text(),'Application Status')]").first();
-           if (await appStatusMenu.isVisible({ timeout: 3000 })) {
-             await appStatusMenu.click({ force: true });
-             await page.waitForTimeout(3000);
-           }
+          await hamburgerBtn.click({ force: true }).catch(() => { });
+          await page.waitForTimeout(1000);
+          const appStatusMenu = page.locator("//a/span[contains(text(),'App Status')] | //button[contains(text(),'App Status')] | //a/span[contains(text(),'Application Status')] | //button[contains(text(),'Application Status')]").first();
+          if (await appStatusMenu.isVisible({ timeout: 3000 })) {
+            await appStatusMenu.click({ force: true });
+            await page.waitForTimeout(3000);
+          }
         }
       } catch (e) {
         console.log('⚠ Failed to force navigate to Application Status via hamburger menu.');
@@ -85,42 +85,44 @@ export async function completeFullPrerequisites(
     await page.waitForTimeout(1000);
   }
 
-  // Force navigation to Zip Code if requested and we aren't already there
-  if (options?.forceZipCode) {
-    const isZip = await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal']);
-    if (!isZip) {
-      console.log(`ℹ forceZipCode is true. Currently on "${await zipCodePage.getCurrentScreen()}". Navigating to Zip Code via Hamburger...`);
-      try {
-        const hamburgerBtn = page.locator("//button[@class='breadcrumb-button' and contains(normalize-space(text()),'...')]").first()
-          .or(page.locator("//button[@class='breadcrumb-button']").last());
-          
-        if (await hamburgerBtn.count() > 0) {
-           await hamburgerBtn.click({ force: true }).catch(() => {});
-           await page.waitForTimeout(1000);
-           const zipMenu = page.locator("//a/span[contains(text(),'Zip Code')] | //button[contains(text(),'Zip Code')] | //a[contains(text(),'Zip Code')]").first();
-           if (await zipMenu.isVisible({ timeout: 3000 })) {
-             await zipMenu.click({ force: true });
-             await page.waitForTimeout(3000);
-           }
+  const isZip = await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal', 'Pin Code Verification']);
+  if (!isZip) {
+    console.log(`ℹ Currently on "${await zipCodePage.getCurrentScreen()}". Navigating to Zip Code via Hamburger...`);
+    try {
+      const hamburgerBtn = page.getByRole('button', { name: '...' }).first()
+        .or(page.getByText('...', { exact: true }).first())
+        .or(page.locator('.slds-icon-utility-rows').first())
+        .or(page.locator("//button[@class='breadcrumb-button' and contains(normalize-space(text()),'...')]").first())
+        .or(page.locator("//button[@class='breadcrumb-button']").last());
+
+      if (await hamburgerBtn.count() > 0) {
+        await hamburgerBtn.click({ force: true }).catch(() => { });
+        await page.waitForTimeout(1000);
+        const zipMenu = page.getByRole('button', { name: /Zip Code Verification|Zip Code|Pin Code/i })
+          .or(page.getByRole('menuitem', { name: /Zip Code Verification|Zip Code|Pin Code/i }))
+          .or(page.locator("//a/span[contains(text(),'Zip Code')] | //button[contains(text(),'Zip Code')] | //a[contains(text(),'Zip Code')] | //a/span[contains(text(),'Pin Code')]")).first();
+        if (await zipMenu.isVisible({ timeout: 3000 })) {
+          await zipMenu.click({ force: true });
+          await page.waitForTimeout(3000);
         }
-      } catch (e) {
-        console.log('⚠ Failed to force navigate to Zip Code via hamburger menu.');
       }
+    } catch (e) {
+      console.log('⚠ Failed to force navigate to Zip Code via hamburger menu.');
     }
   }
 
   // ── Zip Code ───────────────────────────────────────────────────────────────
-  if (await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal'])) {
+  if (await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal', 'Pin Code Verification'])) {
     await test.step('Zip Code Details', async () => {
       await zipCodePage.fillZipCodeDetails({
-        zipCode:           testData['zipcodelabel'] || 'Enter Customer ZipCode',
-        zipCodeValue:      '411014',
-        bflBranch:         testData['bflbranchvalue'] || '411014-Manual Testing Pune',
-        dob:               testData['dobvalue'] || '18-12-1996',
-        gender:            testData['gendervalue'] || 'Male',
-        language:          testData['preferredcommunicationlanguagevalue'] || 'English',
+        zipCode: testData['zipcodelabel'] || 'Enter Customer ZipCode',
+        zipCodeValue: '411014',
+        bflBranch: testData['bflbranchvalue'] || '411014-Manual Testing Pune',
+        dob: testData['dobvalue'] || '18-12-1996',
+        gender: testData['gendervalue'] || 'Male',
+        language: testData['preferredcommunicationlanguagevalue'] || 'English',
         preferredLanguage: testData['preferredlanguagevalue'] || 'HINDI',
-        poaAddressType:    testData['poaaddresstype'],
+        poaAddressType: testData['poaaddresstype'],
       });
       await zipCodePage.proceed(testData['proceedbuttonvalue'] || 'Proceed');
     });
@@ -140,8 +142,43 @@ export async function completeFullPrerequisites(
 
   await page.waitForTimeout(3000);
 
+  // Helper to force navigation via Hamburger if not on the expected screen
+  async function forceNavigateToScreen(targetScreen: string, aliases?: string[]): Promise<boolean> {
+    await page.waitForTimeout(1500);
+    const screen = await page.locator("//div[@class='currentScreen']").innerText().catch(() => '');
+    const allExpected = [targetScreen, ...(aliases || [])];
+    if (allExpected.some(s => screen.toLowerCase().includes(s.toLowerCase()))) {
+      return true;
+    }
+    console.log(`ℹ Currently on "${screen}". Navigating to "${targetScreen}" via Hamburger...`);
+    try {
+      const hamburgerBtn = page.getByRole('button', { name: '...' }).first()
+        .or(page.getByText('...', { exact: true }).first())
+        .or(page.locator('.slds-icon-utility-rows').first())
+        .or(page.locator("//button[@class='breadcrumb-button']").first());
+
+      if (await hamburgerBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await hamburgerBtn.click({ force: true }).catch(() => { });
+        await page.waitForTimeout(1500);
+
+        const targetLink = page.getByRole('button', { name: new RegExp(targetScreen, 'i') })
+          .or(page.getByRole('menuitem', { name: new RegExp(targetScreen, 'i') }))
+          .or(page.locator(`//a//span[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${targetScreen.toLowerCase()}')]`));
+
+        if (await targetLink.first().isVisible({ timeout: 4000 }).catch(() => false)) {
+          await targetLink.first().click({ force: true }).catch(() => { });
+          await page.waitForTimeout(2500);
+          return true;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`⚠ Hamburger navigation to ${targetScreen} failed: ${e.message}`);
+    }
+    return false;
+  }
+
   // ── PAN Verification ───────────────────────────────────────────────────────
-  if (await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification'])) {
+  if (await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification', 'Pan Details'])) {
     await test.step('PAN Verification (No)', async () => {
       await panVerificationPage.fillPanVerificationDetails(
         getVal(testData['panNo'], 'HFHPP1234D'),
@@ -152,6 +189,18 @@ export async function completeFullPrerequisites(
       );
     });
 
+    // Wait for navigation away from PAN
+    await page.waitForTimeout(2000);
+
+    // Check if we're still stuck on Pan Details
+    const stillOnPan = await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification', 'Pan Details']);
+    if (stillOnPan) {
+      console.log('⚠ PAN Verification did not complete. Attempting Hamburger navigation to Product Selection...');
+      await forceNavigateToScreen('Product Selection');
+    } else {
+      console.log('✓ PAN Verification completed successfully.');
+    }
+  } else {
     console.log('⚠ PAN prompt not found. Assuming we are already on Product Selection.');
   }
 
@@ -169,14 +218,30 @@ export async function completeFullPrerequisites(
         testData['proceedbuttonvalue'] || 'Proceed'
       );
     });
+
+    // After Product Selection completes, wait for the Recommended Schemes modal to close
+    await page.waitForTimeout(3000);
   }
 
   if (options?.stopAfter === 'productSelection') return;
 
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(2000);
 
   // ── Income Declaration ─────────────────────────────────────────────────────
-  if (await incomeDeclarationPage.isCurrentScreen('Income Declaration')) {
+  // Wait up to 15s for Income Declaration screen or input
+  for (let i = 0; i < 15; i++) {
+    if (await incomeDeclarationPage.isCurrentScreen('Income Declaration') ||
+      await page.locator('input[name="Income_Declared_Value__c"], input[type="number"]').filter({ hasNot: page.locator('input[readonly]') }).first().isVisible().catch(() => false)) {
+      break;
+    }
+    if (i === 5) {
+      await forceNavigateToScreen('Income Declaration');
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  if (await incomeDeclarationPage.isCurrentScreen('Income Declaration') ||
+    await page.locator('input[name="Income_Declared_Value__c"], input[type="number"]').filter({ hasNot: page.locator('input[readonly]') }).first().isVisible().catch(() => false)) {
     await test.step('Income Declaration', async () => {
       await incomeDeclarationPage.fillIncomeDeclaration(
         '40000',
@@ -187,10 +252,23 @@ export async function completeFullPrerequisites(
 
   if (options?.stopAfter === 'income') return;
 
-  await page.waitForTimeout(4000);
-
   // ── KYC ───────────────────────────────────────────────────────────────────
-  if (await kycPage.isCurrentScreen('KYC')) {
+  // Wait up to 15s for KYC screen
+  for (let i = 0; i < 15; i++) {
+    if (await kycPage.isCurrentScreen(['KYC', 'E-KYC']) ||
+      await page.getByRole('radio', { name: /e-kyc/i }).first().isVisible().catch(() => false) ||
+      await page.locator('text=/KYC|eKYC/i').first().isVisible().catch(() => false)) {
+      break;
+    }
+    if (i === 5) {
+      await forceNavigateToScreen('KYC', ['E-KYC']);
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  if (await kycPage.isCurrentScreen(['KYC', 'E-KYC']) ||
+    await page.getByRole('radio', { name: /e-kyc/i }).first().isVisible().catch(() => false) ||
+    await page.locator('text=/KYC|eKYC/i').first().isVisible().catch(() => false)) {
     await test.step('KYC Details', async () => {
       await kycPage.fillKYCDetails(
         "Customer doesn't have one of the listed Document types",
@@ -202,10 +280,21 @@ export async function completeFullPrerequisites(
 
   if (options?.stopAfter === 'kyc') return;
 
-  await page.waitForTimeout(4000);
-
   // ── POI ───────────────────────────────────────────────────────────────────
-  if (await poiPage.isCurrentScreen('POI')) {
+  // Wait up to 15s for POI screen
+  for (let i = 0; i < 15; i++) {
+    if (await poiPage.isCurrentScreen(['POI', 'Officially Valid Documents']) ||
+      await page.getByRole('textbox', { name: /first name/i }).first().isVisible().catch(() => false)) {
+      break;
+    }
+    if (i === 5) {
+      await forceNavigateToScreen('POI', ['Officially Valid Documents']);
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  if (await poiPage.isCurrentScreen(['POI', 'Officially Valid Documents']) ||
+    await page.getByRole('textbox', { name: /first name/i }).first().isVisible().catch(() => false)) {
     await test.step('POI Details', async () => {
       await poiPage.fillPoiDetails(
         getVal(testData['firstname'], 'Dummycust'),
@@ -223,10 +312,21 @@ export async function completeFullPrerequisites(
 
   if (options?.stopAfter === 'poi') return;
 
-  await page.waitForTimeout(4000);
-
   // ── POA ───────────────────────────────────────────────────────────────────
-  if (await poaPage.isCurrentScreen('POA')) {
+  // Wait up to 15s for POA screen
+  for (let i = 0; i < 15; i++) {
+    if (await poaPage.isCurrentScreen(['POA', 'Current Address']) ||
+      await page.getByText(/add address manually|address line 1/i).first().isVisible().catch(() => false)) {
+      break;
+    }
+    if (i === 5) {
+      await forceNavigateToScreen('POA', ['Current Address']);
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  if (await poaPage.isCurrentScreen(['POA', 'Current Address']) ||
+    await page.getByText(/add address manually|address line 1/i).first().isVisible().catch(() => false)) {
     await test.step('POA Details', async () => {
       await poaPage.fillPoaDetails(
         'Self Owned',
@@ -255,17 +355,14 @@ export async function completeFullPrerequisites(
     const isSurrogateScreen = await surrogateDetailsPage.navigateToSurrogateDetails();
     if (isSurrogateScreen) {
       await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        'RSA',
+        testData['customerbankname'] || 'Axis Bank',
         'No',
         undefined,
-        testData['customerbankname'] || 'Axis Bank'
+        false
       );
+      if (options?.clickProceedInSurrogate) {
+        await surrogateDetailsPage.clickProceed();
+      }
     } else {
       console.log('⚠ Surrogate Details not found. Skipping surrogate step (customer likely advanced).');
     }

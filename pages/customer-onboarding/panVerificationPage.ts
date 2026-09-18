@@ -94,6 +94,21 @@ export class PanVerificationPage extends BasePage {
     }
 
     console.log(`✓ PAN Card: Selected No and skipped successfully.`);
+    
+    // Always attempt to click Proceed if we are still on the PAN Details screen
+    if (proceedButton) {
+        try {
+            const proceedBtn = this.page.getByRole('button', { name: new RegExp(proceedButton, 'i') }).first();
+            if (await proceedBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await proceedBtn.click({ force: true });
+                console.log(`✓ Clicked '${proceedButton}' to proceed from PAN Verification.`);
+                await this.page.waitForTimeout(2000);
+            }
+        } catch (e) {
+            console.log(`No '${proceedButton}' button found or needed.`);
+        }
+    }
+    
     return true;
   }
 

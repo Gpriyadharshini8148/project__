@@ -23,7 +23,7 @@ export class ZipCodePage extends BasePage {
 
     const expectDropdown = data.expectDropdown !== false;
 
-    await this.handleOptionalCheckbox();
+    await this.prepareZipCodeFields(data.zipCode);
     await this.enterZipCode(data.zipCode, data.zipCodeValue, expectDropdown);
     await this.lookupBflBranch(data.bflBranch, expectDropdown);
     await this.enterDOB(data.dob);
@@ -66,14 +66,87 @@ export class ZipCodePage extends BasePage {
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
-  private async handleOptionalCheckbox(): Promise<void> {
-    const checkbox = this.page.locator('span.slds-checkbox_faux').first();
-    if (!await checkbox.isVisible({ timeout: 1000 }).catch(() => false)) return;
-    await checkbox.evaluate((el) =>
-      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
-    );
-    await checkbox.click({ force: true }).catch(() => { });
-    console.log('✓ Optional checkbox clicked');
+  private async prepareZipCodeFields(label: string): Promise<void> {
+    const zipInput = this.textbox(label);
+    await zipInput.waitFor({ state: 'visible', timeout: 10000 });
+
+    const editToggle = this.page.locator(
+      'input[name="zipCodeEditToggle"][role="switch"]'
+    ).first();
+    if (await editToggle.waitFor({ state: 'attached', timeout: 3000 }).then(() => true).catch(() => false)) {
+      if (!await editToggle.isChecked()) {
+        await editToggle.evaluate((element: HTMLInputElement) => {
+          element.checked = true;
+          element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        });
+      }
+
+      await expect(zipInput).toBeEnabled({ timeout: 5000 });
+      console.log('✓ Enabled Change Zipcode toggle');
+      return;
+    }
+
+    const currentValue = await zipInput.inputValue().catch(() => '');
+    const disabled = await zipInput.isDisabled().catch(() => false);
+    if (!disabled && !currentValue.trim()) return;
+
+    const changeZipcode = this.page
+      .getByRole('button', { name: /change\s*zip\s*code/i })
+      .or(this.page.getByText(/change\s*zip\s*code/i, { exact: false }))
+      .or(this.page.locator('label:has-text("Change Zipcode")'))
+      .or(this.page.locator('input[type="checkbox"][name*="zip" i]'))
+      .first();
+
+    await changeZipcode.waitFor({ state: 'visible', timeout: 5000 });
+    await changeZipcode.scrollIntoViewIfNeeded();
+    await changeZipcode.click({ force: true });
+    await expect(zipInput).toBeEnabled({ timeout: 5000 });
+    console.log('✓ Clicked Change Zipcode and unlocked the fields');
+  }
+
+  private async selectLookupOption(input: Locator, prefix: string, fieldName: string): Promise<void> {
+    const prefixPattern = new RegExp(prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const matchingOption = this.page
+      .locator(
+        'lightning-base-combobox-item, [role="option"], .slds-listbox__item, .slds-listbox__option, li'
+      )
+      .filter({ hasText: prefixPattern })
+      .or(this.page.getByText(prefixPattern, { exact: false }))
+      .filter({ visible: true })
+      .first();
+
+    let optionAvailable = false;
+    for (let attempt = 1; attempt <= 3 && !optionAvailable; attempt++) {
+      optionAvailable = await matchingOption
+        .waitFor({ state: 'visible', timeout: attempt === 1 ? 10000 : 8000 })
+        .then(() => true)
+        .catch(() => false);
+      if (optionAvailable) break;
+
+      await this.page.keyboard.press('Escape').catch(() => {});
+      await input.fill('');
+      await input.click({ force: true });
+      if (fieldName === 'Customer Zip Code' && prefix.length === 6) {
+        await input.pressSequentially(prefix.slice(0, 4), { delay: 120 });
+        await this.page.waitForTimeout(1000 + attempt * 500);
+        await input.pressSequentially(prefix.slice(4), { delay: 120 });
+      } else {
+        await input.pressSequentially(prefix, { delay: 150 });
+      }
+      await this.page.waitForTimeout(500 * attempt);
+    }
+
+    if (!optionAvailable) {
+      throw new Error(`${fieldName} option '${prefix}' is not available for the selected zip code`);
+    }
+    await matchingOption.click({ force: true });
+
+    const selectedValue = await input.inputValue();
+    if (!selectedValue.includes(prefix)) {
+      throw new Error(`${fieldName} option '${prefix}' was not selected`);
+    }
+    console.log(`✓ ${fieldName} selected: ${selectedValue}`);
   }
 
   private async enterZipCode(label: string, value: string, expectDropdown: boolean): Promise<void> {
@@ -119,25 +192,7 @@ export class ZipCodePage extends BasePage {
       await this.waitFor(500);
     }
     
-    if (await input.isDisabled().catch(() => false)) {
-      // Look for the "Change Zipcode" toggle button
-      const changeZipcodeToggle = this.page.getByText('Change Zipcode', { exact: false }).first();
-      if (await changeZipcodeToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await changeZipcodeToggle.click({ force: true });
-        console.log('✓ Clicked "Change Zipcode" toggle to unlock field');
-        
-        // Wait up to 2 seconds for it to become enabled
-        await expect(input).toBeEnabled({ timeout: 2000 }).catch(() => {});
-        
-        if (await input.isDisabled().catch(() => false)) {
-           console.log(`⚠ Zip Code input remained disabled after clicking toggle. Assuming pre-filled correctly and skipping...`);
-           return;
-        }
-      } else {
-        console.log(`ℹ Zip Code input is disabled and no toggle found, assuming already filled`);
-        return;
-      }
-    }
+    await expect(input).toBeEnabled({ timeout: 5000 });
 
     // Try to click the clear pill if it exists (crucial for resetting LWC state)
     const clearZipBtn = this.page.locator(`//label[contains(text(), 'Zip/Postal Code')]/following::button[contains(@title, 'Clear') or contains(@title, 'Remove')][1]`).first();
@@ -154,12 +209,9 @@ export class ZipCodePage extends BasePage {
     
     // Use fill instead of pressSequentially to avoid LWC eating the first character
     // and use `codePrefix` so it types "411014" instead of "411014 Pune"
-    await input.fill(codePrefix, { force: true }).catch(() => {});
-    await this.page.waitForTimeout(500);
-    
-    await input.click({ force: true }).catch(() => {});
-    await this.page.keyboard.press('ArrowDown').catch(() => {});
-    await this.page.waitForTimeout(1500);
+    await input.fill('');
+    await input.pressSequentially(codePrefix, { delay: 120 });
+    await this.page.waitForTimeout(800);
 
     if (!expectDropdown) {
       await this.page.keyboard.press('Escape');
@@ -167,29 +219,7 @@ export class ZipCodePage extends BasePage {
       return;
     }
 
-    // Custom LWC dropdowns can take several seconds to fetch results. 
-    // We explicitly wait for the EXACT option to appear, ignoring "Searching..." or stale options.
-    // Use getByText to pierce shadow DOM inside lightning-base-combobox-item
-    const exactOption = this.page.locator('lightning-base-combobox-item, li[role="option"], li.listitem')
-      .filter({ has: this.page.getByText(value, { exact: false }) })
-      .first();
-    const anyOption = this.page.locator('lightning-base-combobox-item, li[role="option"], li.listitem').filter({ hasText: /\w/ }).first();
-
-    let appeared = await exactOption.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
-
-    if (appeared) {
-      await exactOption.click({ force: true });
-      console.log(`✓ Zip code (exact Playwright): ${value}`);
-    } else {
-      console.log(`ℹ Exact option didn't appear, checking for any option fallback...`);
-      if (await anyOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await anyOption.click({ force: true });
-        console.log(`⚠ Zip code (first available option fallback used)`);
-      } else {
-        await this.page.keyboard.press('Escape');
-        console.log(`⚠ No zip code option found for '${value}'`);
-      }
-    }
+    await this.selectLookupOption(input, codePrefix, 'Customer Zip Code');
   }
 
   private async lookupBflBranch(value: string, expectDropdown: boolean): Promise<void> {
@@ -207,24 +237,7 @@ export class ZipCodePage extends BasePage {
       await this.waitFor(500);
     }
 
-    if (await input.isDisabled().catch(() => false)) {
-      console.log(`ℹ BFL Branch input is disabled. Clicking 'Change Zipcode' to unlock...`);
-      const changeZipcodeToggle = this.page.getByText('Change Zipcode', { exact: false }).first();
-      if (await changeZipcodeToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await changeZipcodeToggle.click({ force: true });
-        
-        // Wait up to 2 seconds for it to become enabled
-        await expect(input).toBeEnabled({ timeout: 2000 }).catch(() => {});
-        
-        if (await input.isDisabled().catch(() => false)) {
-           console.log(`⚠ BFL Branch input remained disabled after clicking toggle. Assuming pre-filled correctly and skipping...`);
-           return;
-        }
-      } else {
-        console.log(`ℹ BFL Branch input is disabled and no toggle found, assuming already filled`);
-        return;
-      }
-    }
+    await expect(input).toBeEnabled({ timeout: 10000 });
     
     await input.scrollIntoViewIfNeeded().catch(() => {});
     await input.click({ force: true }).catch(() => {});
@@ -244,14 +257,9 @@ export class ZipCodePage extends BasePage {
     await this.page.waitForTimeout(200);
     
     // Type the prefix using fill
-    await input.fill(codePrefix, { force: true }).catch(() => {});
-    await this.page.waitForTimeout(500);
-    
-    // Crucial: In Salesforce LWC, BFL Branch specifically requires an explicit click 
-    // after typing to trigger the dropdown to render its search results!
-    await input.click({ force: true }).catch(() => {});
-    await this.page.keyboard.press('ArrowDown').catch(() => {});
-    await this.page.waitForTimeout(1500);
+    await input.fill('');
+    await input.pressSequentially(codePrefix, { delay: 120 });
+    await this.page.waitForTimeout(800);
 
     if (!expectDropdown) {
       await this.page.keyboard.press('Escape');
@@ -259,62 +267,43 @@ export class ZipCodePage extends BasePage {
       return;
     }
 
-    // Wait for exact match to bypass "Searching..." or stale options
-    const exactOption = this.page.locator('lightning-base-combobox-item, li[role="option"], li.listitem')
-      .filter({ has: this.page.getByText(value, { exact: false }) })
-      .filter({ visible: true })
-      .first();
-    const anyOption = this.page.locator('lightning-base-combobox-item, li[role="option"], li.listitem').filter({ visible: true, hasText: /\w/ }).first();
-
-    let appeared = await exactOption.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
-
-    if (appeared) {
-      await exactOption.click({ force: true });
-      console.log(`✓ BFL Branch (exact Playwright): ${value}`);
-    } else {
-      console.log(`ℹ Exact BFL Branch didn't appear, checking for any option fallback...`);
-      if (await anyOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await anyOption.click({ force: true });
-        console.log(`⚠ BFL Branch (first available option fallback used)`);
-      } else {
-        // Keyboard fallback if no option matched visually
-        await this.page.keyboard.press('ArrowDown').catch(() => {});
-        await this.page.keyboard.press('Enter').catch(() => {});
-        console.log(`✓ BFL Branch: Attempted keyboard fallback selection`);
-      }
-    }
+    await this.selectLookupOption(input, codePrefix, 'BFL Branch');
 
     await this.page.keyboard.press('Escape').catch(() => { });
     await this.waitFor(150);
   }
+private async enterDOB(dob: string): Promise<void> {
+  const candidates: Locator[] = [
+    this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'date of birth')]/following::input[1]"),
+    this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'dob')]/following::input[1]"),
+    this.page.getByPlaceholder(/date of birth|dob/i).first(),
+    this.page.getByRole('textbox', { name: /date of birth|dob/i }).first(),
+    this.page.locator("input[type='date']").first(),
+  ];
 
-  private async enterDOB(dob: string): Promise<void> {
-    const candidates: Locator[] = [
-      this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'date of birth')]/following::input[1]"),
-      this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'dob')]/following::input[1]"),
-      this.page.getByPlaceholder(/date of birth|dob/i).first(),
-      this.page.getByRole('textbox', { name: /date of birth|dob/i }).first(),
-      this.page.locator("input[type='date']").first(),
-    ];
+  const input = await Promise.race(
+    candidates.map(loc =>
+      loc.waitFor({ state: 'visible', timeout: 6000 }).then(() => loc).catch(() => null)
+    )
+  );
 
-    const input = await Promise.race(
-      candidates.map(loc =>
-        loc.waitFor({ state: 'visible', timeout: 6000 }).then(() => loc).catch(() => null)
-      )
-    );
+  if (!input) throw new Error('DOB input not found within 6 seconds');
 
-    if (!input) throw new Error('DOB input not found within 6 seconds');
+  await input.scrollIntoViewIfNeeded();
 
-    await input.scrollIntoViewIfNeeded();
-    await input.click();
-    await input.press('Control+A');
-    await input.press('Backspace');
+  // Defensive: close any open combobox/lookup that may overlay and intercept clicks
+  await this.page.keyboard.press('Escape').catch(() => {});
+  await this.page.waitForTimeout(120); // give DOM a moment to hide overlays
 
-    const cleanDob = dob.replace(/-/g, '');
-    await input.pressSequentially(cleanDob, { delay: 60 });
-    await this.page.keyboard.press('Tab');
-    console.log(`✓ Entered DOB: ${dob}`);
-  }
+  await input.click();
+  await input.press('Control+A');
+  await input.press('Backspace');
+
+  const cleanDob = dob.replace(/-/g, '');
+  await input.pressSequentially(cleanDob, { delay: 60 });
+  await this.page.keyboard.press('Tab');
+  console.log(`✓ Entered DOB: ${dob}`);
+}
 
   private async selectGenderIfNeeded(value: string): Promise<void> {
     const genderEl = this.page.getByRole('combobox', { name: 'Gender' }).first();

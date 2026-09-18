@@ -3,7 +3,7 @@ import { LoginPage } from '../pages/common/LoginPage';
 import { DealerSearchPage, AppStatusPage } from '../pages/search';
 import { ZipCodePage, MitcPage, KycPage, PoiPage, PoaPage, PanVerificationPage } from '../pages/customer-onboarding';
 import { ProductSelectionPage, IncomeDeclarationPage } from '../pages/product';
-import { SurrogateDetailsPage, ApprovalDetailsPage, AdditionalDetailsPage, ReappraisalPage, AssetCartPage } from '../pages/approval';
+import { SurrogateDetailsPage, ApprovalDetailsPage, AdditionalDetailsPage, PermanentAddressPage, EmploymentIncomeDetailsPage, ReappraisalPage, AssetCartPage } from '../pages/approval';
 import { AdminCustomerPage } from '../pages/admin';
 
 /**
@@ -33,6 +33,8 @@ export interface PageObjects {
   surrogateDetailsPage: SurrogateDetailsPage;
   approvalDetailsPage: ApprovalDetailsPage;
   additionalDetailsPage: AdditionalDetailsPage;
+  permanentAddressPage: PermanentAddressPage;
+  employmentIncomeDetailsPage: EmploymentIncomeDetailsPage;
   reappraisalPage: ReappraisalPage;
   assetCartPage: AssetCartPage;
   
@@ -104,6 +106,12 @@ export const test = base.extend<PageObjects>({
   },
   additionalDetailsPage: async ({ page }, use) => {
     await use(new AdditionalDetailsPage(page));
+  },
+  permanentAddressPage: async ({ page }, use) => {
+    await use(new PermanentAddressPage(page));
+  },
+  employmentIncomeDetailsPage: async ({ page }, use) => {
+    await use(new EmploymentIncomeDetailsPage(page));
   },
   reappraisalPage: async ({ page }, use) => {
     await use(new ReappraisalPage(page));

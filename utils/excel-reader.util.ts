@@ -1,5 +1,6 @@
+// @ts-ignore
 import XLSX from 'xlsx';
-import path from 'path';
+import * as path from 'path';
 import { fileURLToPath } from 'url';
 import type { TestDataRow, TestSuiteConfig } from '../types/test-data.types';
 

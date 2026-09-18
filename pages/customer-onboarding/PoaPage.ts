@@ -14,12 +14,12 @@ export class PoaPage extends BasePage {
     return value.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
   }
 
-  private async selectAddAddressManually(): Promise<void> {
+  public async selectAddAddressManually(): Promise<void> {
     const candidates = [
-      this.page.getByText(/add address manually|manual/i).first(),
-      this.page.locator('label').filter({ hasText: /add address manually|manual/i }).first(),
+      this.page.getByText(/add address manually|manual address|enter address manually|add manually|manual/i).first(),
+      this.page.locator('label').filter({ hasText: /add address manually|manual address|enter address manually|add manually|manual/i }).first(),
+      this.page.getByRole('radio', { name: /add address manually|manual address|enter address manually|add manually|manual/i }).first(),
       this.page.locator('input[type="radio"]').filter({ has: this.page.locator('..') }).first(),
-      this.page.getByRole('radio', { name: /add address manually|manual/i }).first(),
     ];
 
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -110,11 +110,10 @@ export class PoaPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(value);
 
       if (normalizedCurrent === normalizedExpected) {
-        console.log(`✓ ${label} already matches the expected value; proceeding without refill.`);
-        return;
+        console.log(`⚠ ${label} already matches the expected value; but refilling to trigger UI events.`);
+      } else {
+        console.log(`⚠ ${label} value mismatch. Existing: "${currentValue}" | Expected: "${value}". Clearing and refilling.`);
       }
-
-      console.log(`⚠ ${label} value mismatch. Existing: "${currentValue}" | Expected: "${value}". Clearing and refilling.`);
       await this.clearInputValue(locator, label);
     }
 
@@ -123,34 +122,42 @@ export class PoaPage extends BasePage {
     console.log(`✓ Entered ${label}: ${value}`);
   }
 
-  public async selectDropdownIfNeeded(label: string, value: string): Promise<void> {
-    if (!value || !value.trim()) return;
+  public async selectDropdownIfNeeded(label: string, value: string): Promise<boolean> {
+    if (!value || !value.trim()) return false;
 
-    const candidates = [
-      this.page.getByRole('combobox', { name: new RegExp(label, 'i') }).first(),
-      this.page.getByRole('button', { name: new RegExp(label, 'i') }).first(),
-      this.page.locator('label').filter({ hasText: new RegExp(label, 'i') }).locator('..').locator('select, [role="combobox"]').first(),
-      this.page.locator('select').filter({ has: this.page.locator('option', { hasText: new RegExp(value, 'i') }) }).first(),
-    ];
+    const labelAliases = [label];
+    if (/poa.*type/i.test(label) || /proof/i.test(label)) {
+      labelAliases.push('Current Address Proof Submitted', 'Current Address Proof', 'Proof Submitted', 'POA Type');
+    }
 
     let finalDropdown: any = null;
-    for (const candidate of candidates) {
-      const exists = await candidate.count().catch(() => 0);
-      if (exists) {
-        finalDropdown = candidate;
-        break;
+    for (const alias of labelAliases) {
+      const candidates = [
+        this.page.getByRole('combobox', { name: new RegExp(alias, 'i') }).first(),
+        this.page.getByRole('button', { name: new RegExp(alias, 'i') }).first(),
+        this.page.locator('label').filter({ hasText: new RegExp(alias, 'i') }).locator('..').locator('select, [role="combobox"]').first(),
+        this.page.locator('select').filter({ has: this.page.locator('option', { hasText: new RegExp(value, 'i') }) }).first(),
+      ];
+
+      for (const candidate of candidates) {
+        const exists = await candidate.count().catch(() => 0);
+        if (exists) {
+          finalDropdown = candidate;
+          break;
+        }
       }
+      if (finalDropdown) break;
     }
 
     if (!finalDropdown) {
       console.warn(`⚠ ${label} dropdown not found; skipping selection.`);
-      return;
+      return false;
     }
 
     const visible = await finalDropdown.isVisible({ timeout: 1000 }).catch(() => false);
     if (!visible) {
       console.warn(`⚠ ${label} dropdown is not visible; skipping selection.`);
-      return;
+      return false;
     }
 
     const currentValue = (await finalDropdown.inputValue({ timeout: 1000 }).catch(() => '')).trim();
@@ -162,11 +169,10 @@ export class PoaPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(value);
 
       if (normalizedCurrent === normalizedExpected) {
-        console.log(`✓ ${label} already matches the expected value; proceeding without refill.`);
-        return;
+        console.log(`⚠ ${label} already matches the expected value; but re-selecting to trigger UI events.`);
+      } else {
+        console.log(`⚠ ${label} value mismatch. Existing: "${existingText}" | Expected: "${value}". Re-selecting.`);
       }
-
-      console.log(`⚠ ${label} value mismatch. Existing: "${existingText}" | Expected: "${value}". Re-selecting.`);
     }
 
     try {
@@ -176,11 +182,12 @@ export class PoaPage extends BasePage {
         await finalDropdown.selectOption({ value: value }, { timeout: 5000 });
       } catch {
         console.warn(`⚠ Could not select ${value} in ${label}; skipping.`);
-        return;
+        return false;
       }
     }
 
     console.log(`✓ Selected ${value} from ${label}`);
+    return true;
   }
 
   /**
@@ -199,17 +206,27 @@ export class PoaPage extends BasePage {
     state: string,
     poaType: string,
     poaNumber: string,
-    proceedButton: string
+    proceedButton: string,
+    areaBelt?: string
   ): Promise<void> {
     console.log('===== POA Page =====');
-    await this.verifyCurrentScreen('POA');
+    await this.verifyCurrentScreen(['POA', 'Current Address']);
 
-    // Always select Add Address Manually for the POA flow; do not silently fall back to Current Address.
-    await this.selectAddAddressManually();
+    // Check if the address form is already open (e.g. Address Line 1 visible)
+    const addressLine1Field = this.page.getByRole('textbox', { name: /address line 1/i }).first()
+      .or(this.page.locator('textarea[name*="addressLine1" i], input[name*="addressLine1" i]').first());
 
-    await this.clickButton('Proceed');
-    await this.page.getByText('Address Line 1 *', { exact: true }).waitFor({ state: 'visible', timeout: 20000 });
-    console.log('✓ Reached POA details form and waiting for Address Line 1 field.');
+    const isFormAlreadyOpen = await addressLine1Field.isVisible({ timeout: 2000 }).catch(() => false);
+
+    if (!isFormAlreadyOpen) {
+      // Select Add Address Manually for the POA flow
+      await this.selectAddAddressManually();
+      await this.clickButton('Proceed');
+      await this.page.getByText('Address Line 1', { exact: false }).first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+      console.log('✓ Reached POA details form and waiting for Address Line 1 field.');
+    } else {
+      console.log('✓ Address details form already visible; proceeding to fill fields.');
+    }
 
     // --- FIX FOR RESIDENCE TYPE DROPDOWN ---
     const residenceTypeDropdown = this.page.locator(
@@ -241,35 +258,35 @@ export class PoaPage extends BasePage {
       const normalizedCurrent = this.normalizeComparisonValue(currentValue || '');
 
       if (normalizedCurrent && normalizedCurrent === this.normalizeComparisonValue(targetValue)) {
-        console.log(`✓ Residence Type already matches "${targetValue}"; proceeding without refill.`);
+        console.log(`⚠ Residence Type already matches "${targetValue}"; but re-selecting to trigger UI events.`);
+      }
+      
+      const disabled = await residenceTypeDropdown.evaluate((el: HTMLSelectElement) => el.disabled || el.hasAttribute('disabled')).catch(() => false);
+      if (disabled) {
+        console.warn(`⚠ Residence Type dropdown is disabled/locked; cannot change value to "${targetValue}". Skipping.`);
       } else {
-        const disabled = await residenceTypeDropdown.evaluate((el: HTMLSelectElement) => el.disabled || el.hasAttribute('disabled')).catch(() => false);
-        if (disabled) {
-          console.warn(`⚠ Residence Type dropdown is disabled/locked; cannot change value to "${targetValue}". Skipping.`);
-        } else {
-          try {
-            await residenceTypeDropdown.selectOption({ label: targetValue }, { timeout: 3000 });
-          } catch {
-            await residenceTypeDropdown.selectOption({ value: targetValue }, { timeout: 3000 }).catch(async () => {
-              // Fallback: iterate over options to match by normalized innerText
-              const optionElements = await residenceTypeDropdown.locator('option').allInnerTexts().catch(() => []);
-              const matchingOption = optionElements.find(
-                (opt) => this.normalizeComparisonValue(opt) === this.normalizeComparisonValue(targetValue)
-              );
-              if (matchingOption) {
-                await residenceTypeDropdown.selectOption({ label: matchingOption.trim() }, { timeout: 3000 }).catch(() => {
-                  console.warn(`⚠ Could not select "${matchingOption.trim()}" (dropdown might have locked dynamically). Skipping.`);
-                });
-              } else {
-                console.warn(`⚠ No matching option found for "${targetValue}". Skipping.`);
-              }
-            });
-          }
-
-          // Trigger change event for LWC framework reactivity
-          await residenceTypeDropdown.dispatchEvent('change').catch(() => {});
-          console.log(`✓ Attempted to select "${targetValue}" from Residence Type`);
+        try {
+          await residenceTypeDropdown.selectOption({ label: targetValue }, { timeout: 3000 });
+        } catch {
+          await residenceTypeDropdown.selectOption({ value: targetValue }, { timeout: 3000 }).catch(async () => {
+            // Fallback: iterate over options to match by normalized innerText
+            const optionElements = await residenceTypeDropdown.locator('option').allInnerTexts().catch(() => []);
+            const matchingOption = optionElements.find(
+              (opt) => this.normalizeComparisonValue(opt) === this.normalizeComparisonValue(targetValue)
+            );
+            if (matchingOption) {
+              await residenceTypeDropdown.selectOption({ label: matchingOption.trim() }, { timeout: 3000 }).catch(() => {
+                console.warn(`⚠ Could not select "${matchingOption.trim()}" (dropdown might have locked dynamically). Skipping.`);
+              });
+            } else {
+              console.warn(`⚠ No matching option found for "${targetValue}". Skipping.`);
+            }
+          });
         }
+
+        // Trigger change event for LWC framework reactivity
+        await residenceTypeDropdown.dispatchEvent('change').catch(() => {});
+        console.log(`✓ Attempted to select "${targetValue}" from Residence Type`);
       }
     } else {
       console.warn('⚠ Residence Type select not found; skipping selection.');
@@ -283,18 +300,120 @@ export class PoaPage extends BasePage {
       .or(this.page.locator('input[name*="zip" i], input[name*="pincode" i], input[name*="postal" i]').first())
       .or(this.page.locator('input[id*="zip" i], input[id*="pincode" i]').first());
     await this.clearAndFillIfNeeded(zipCodeInput, zipCode, 'Zip Code');
+    
+    if (areaBelt) {
+      await this.page.waitForTimeout(2000); // give time for area belt to populate if dynamic
+      
+      const areaBeltDropdown = this.page.getByRole('combobox', { name: /area belt/i }).first()
+        .or(this.page.locator('select[name*="areaBelt" i], select[id*="areaBelt" i]').first())
+        .or(this.page.locator('lightning-combobox').filter({ hasText: /Area Belt/i }).locator('input, button').first())
+        .or(this.page.locator('//label[contains(normalize-space(.), "Area Belt")]/following::input[1]').first());
+
+      if (await areaBeltDropdown.count().catch(() => 0) && await areaBeltDropdown.isVisible({ timeout: 1000 }).catch(() => false)) {
+        try {
+          // Try native select first
+          await areaBeltDropdown.selectOption({ label: areaBelt }, { timeout: 2000 });
+          console.log(`✓ Selected Area Belt (native): ${areaBelt}`);
+        } catch {
+          try {
+            // Try custom LWC combobox click-and-select
+            await areaBeltDropdown.click({ force: true });
+            await this.page.waitForTimeout(1000);
+            
+            const option = this.page.getByRole('option', { name: new RegExp(areaBelt, 'i') }).first()
+              .or(this.page.locator(`lightning-base-combobox-item`).filter({ hasText: new RegExp(areaBelt, 'i') }).first())
+              .or(this.page.locator(`//span[contains(text(), "${areaBelt}")]`).first());
+            
+            if (await option.isVisible({ timeout: 2000 }).catch(() => false)) {
+               await option.click({ force: true });
+               console.log(`✓ Selected Area Belt (custom option): ${areaBelt}`);
+            } else {
+               // Try typing into it if it's searchable
+               if (await areaBeltDropdown.isEditable().catch(() => false)) {
+                 await areaBeltDropdown.fill(areaBelt);
+                 await this.page.waitForTimeout(1000);
+                 await this.page.keyboard.press('ArrowDown');
+                 await this.page.keyboard.press('Enter');
+                 console.log(`✓ Typed Area Belt (autocomplete): ${areaBelt}`);
+               } else {
+                 console.warn(`⚠ Could not select Area Belt options and field is not editable.`);
+               }
+            }
+          } catch (e) {
+            console.warn(`⚠ Failed to interact with Area Belt dropdown: ${e}`);
+          }
+        }
+      } else {
+        console.warn('⚠ Area Belt field not found or not visible.');
+      }
+    }
+
     await this.selectDropdownIfNeeded('BFL Branch', bflBranch);
 
-    await this.clearAndFillIfNeeded(this.page.getByRole('textbox', { name: /address line 1/i }).first(), addressLine1, 'Address Line 1');
-    await this.clearAndFillIfNeeded(this.page.getByRole('textbox', { name: /address line 2/i }).first(), addressLine2, 'Address Line 2');
-    await this.clearAndFillIfNeeded(this.page.getByRole('textbox', { name: /address line 3/i }).first(), addressLine3, 'Address Line 3');
+    const addressLine1Input = this.page.getByRole('textbox', { name: /house no.*address line 1|address line 1/i }).first()
+      .or(this.page.locator('textarea[name*="addressLine1" i], input[name*="addressLine1" i], textarea[aria-label*="Address Line 1" i], input[aria-label*="Address Line 1" i], textarea[placeholder*="Address Line 1" i], input[placeholder*="Address Line 1" i]').first())
+      .or(this.page.locator('//label[contains(normalize-space(.), "Address Line 1") or contains(normalize-space(.), "Address Line1")]/following::input[1] | //label[contains(normalize-space(.), "Address Line 1") or contains(normalize-space(.), "Address Line1")]/following::textarea[1]').first());
+    const addressLine2Input = this.page.getByRole('textbox', { name: /street.*address line 2|address line 2/i }).first()
+      .or(this.page.locator('textarea[name*="addressLine2" i], input[name*="addressLine2" i], textarea[aria-label*="Address Line 2" i], input[aria-label*="Address Line 2" i], textarea[placeholder*="Address Line 2" i], input[placeholder*="Address Line 2" i]').first())
+      .or(this.page.locator('//label[contains(normalize-space(.), "Address Line 2")]/following::input[1] | //label[contains(normalize-space(.), "Address Line 2")]/following::textarea[1]').first());
+    const addressLine3Input = this.page.getByRole('textbox', { name: /landmark\/address line 3|address line 3/i }).first()
+      .or(this.page.locator('textarea[name*="addressLine3" i], input[name*="addressLine3" i], textarea[aria-label*="Address Line 3" i], input[aria-label*="Address Line 3" i], textarea[placeholder*="Address Line 3" i], input[placeholder*="Address Line 3" i]').first())
+      .or(this.page.locator('//label[contains(normalize-space(.), "Address Line 3")]/following::input[1] | //label[contains(normalize-space(.), "Address Line 3")]/following::textarea[1]').first());
 
-    await this.clearAndFillIfNeeded(this.page.getByRole('textbox', { name: /area|locality/i }).first(), areaLocality, 'Area/Locality');
+    await this.clearAndFillIfNeeded(addressLine1Input, addressLine1, 'Address Line 1');
+    await this.clearAndFillIfNeeded(addressLine2Input, addressLine2, 'Address Line 2');
+    await this.clearAndFillIfNeeded(addressLine3Input, addressLine3, 'Address Line 3');
 
-    const landmarkInput = this.page.getByRole('textbox', { name: 'Enter Landmark' });
-    await this.clearAndFillIfNeeded(landmarkInput, landmark, 'Landmark');
+    const areaCandidates = [
+      this.page.getByRole('textbox', { name: 'Enter Area' }),
+      this.page.getByPlaceholder('Enter Area', { exact: true }),
+      this.page.getByPlaceholder('Enter Area'),
+      this.page.getByRole('textbox', { name: /^Area\s*\*?$/i }),
+      this.page.locator('input[name*="area" i], input[placeholder*="Area" i]'),
+      this.page.locator('//label[contains(normalize-space(.), "Area")]/following::input[1]')
+    ];
 
-    await this.clearAndFillIfNeeded(this.page.getByRole('textbox', { name: /city/i }).first(), city, 'City');
+    let foundAreaLocality: any = null;
+    for (const candidate of areaCandidates) {
+      const c = await candidate.count().catch(() => 0);
+      for (let i = 0; i < c; i++) {
+        const item = candidate.nth(i);
+        if (await item.isVisible({ timeout: 500 }).catch(() => false)) {
+          foundAreaLocality = item;
+          break;
+        }
+      }
+      if (foundAreaLocality) break;
+    }
+
+    if (foundAreaLocality) {
+      await this.clearAndFillIfNeeded(foundAreaLocality, areaLocality, 'Area');
+    } else {
+      console.warn('⚠ Area input not found or not visible; skipping fill.');
+    }
+
+    // Landmark field - direct fill with focus, clear, and type
+    const landmarkInput = this.page.locator('input[name="landmark"]').first();
+    
+    if (await landmarkInput.count().catch(() => 0)) {
+      try {
+        await landmarkInput.waitFor({ state: 'visible', timeout: 3000 });
+        await landmarkInput.focus();
+        await landmarkInput.evaluate((el: any) => el.value = '');
+        await landmarkInput.type(landmark, { delay: 50 });
+        await landmarkInput.press('Tab');
+        console.log(`✓ Entered Landmark: ${landmark}`);
+      } catch (e) {
+        console.warn(`⚠ Direct landmark fill failed: ${e}. Trying generic method...`);
+        await this.clearAndFillIfNeeded(landmarkInput, landmark, 'Landmark');
+      }
+    } else {
+      console.warn('⚠ Landmark field not found; skipping.');
+    }
+
+    const cityInput = this.page.getByRole('textbox', { name: /city/i }).first()
+      .or(this.page.locator('input[name*="city" i], input[aria-label*="City" i], input[placeholder*="City" i]').first());
+    await this.clearAndFillIfNeeded(cityInput, city, 'City');
 
     const stateField = this.page.getByRole('textbox', { name: /state/i }).first();
     const stateInput = this.page.locator('input[aria-label*="State" i], input[name*="state" i], input[placeholder*="State" i]').first();
@@ -305,7 +424,25 @@ export class PoaPage extends BasePage {
       await this.selectDropdownIfNeeded('State', state);
     }
 
-    await this.selectDropdownIfNeeded('POA Type', poaType);
+    // Special handling for POA Type - it's critical to fill before proceeding
+    const poaTypeSelected = await this.selectDropdownIfNeeded('POA Type', poaType);
+    if (!poaTypeSelected) {
+      console.warn('⚠ POA Type selection via standard method failed; trying alternative selectors...');
+      const poaTypeDropdown = this.page.locator('select[data-id="poaType"]').first()
+        .or(this.page.locator('select[name*="poa" i], select[name*="document" i]').first())
+        .or(this.page.locator('//h1[contains(text(), "POA Type")]/following::select[1] | //h1[contains(text(), "POA Type")]/following::*[1]//select').first());
+      
+      if (await poaTypeDropdown.count().catch(() => 0)) {
+        try {
+          await poaTypeDropdown.selectOption({ label: poaType }, { timeout: 5000 }).catch(async () => {
+            await poaTypeDropdown.selectOption({ value: poaType }, { timeout: 5000 });
+          });
+          console.log(`✓ Selected ${poaType} from POA Type via alternative selector`);
+        } catch (e) {
+          console.warn(`⚠ POA Type selection failed even with alternative selector: ${e}`);
+        }
+      }
+    }
 
     const normalizedPoaNumber =
       this.normalizeComparisonValue(poaType).includes('aadhaar') && /^\d{12}$/.test((poaNumber || '').trim())
@@ -313,13 +450,13 @@ export class PoaPage extends BasePage {
         : (poaNumber || '').trim();
 
     const poaNumberInput = this.page.locator(
-      'input[aria-label*="POA Number" i], input[aria-label*="Document Number" i], input[name*="poa" i], input[name*="document" i], input[placeholder*="POA Number" i], input[placeholder*="Document Number" i]'
+      'input[aria-label*="POA Number" i], input[aria-label*="Document Number" i], input[name*="poa" i], input[name*="document" i], input[placeholder*="POA Number" i], input[placeholder*="Document Number" i], input[aria-label*="UIDAI" i], input[placeholder*="UIDAI" i]'
     ).first();
 
     if (await poaNumberInput.count().catch(() => 0)) {
       await this.clearAndFillIfNeeded(poaNumberInput, normalizedPoaNumber, 'POA Number');
     } else {
-      const poaNumberTextbox = this.page.getByRole('textbox', { name: /poa number|document number/i }).first();
+      const poaNumberTextbox = this.page.getByRole('textbox', { name: /poa number|document number|uidai|digit/i }).first();
       if (await poaNumberTextbox.count().catch(() => 0)) {
         await this.clearAndFillIfNeeded(poaNumberTextbox, normalizedPoaNumber, 'POA Number');
       } else {

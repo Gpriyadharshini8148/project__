@@ -133,8 +133,19 @@ export class ProductSelectionPage extends BasePage {
       : isSamyang
         ? '10mm'
         : productModel;
+    
+    // Wait for Product Model input to be visible
     const productModelInput = this.page.getByRole('textbox', { name: 'Select Product Model' });
-    await productModelInput.scrollIntoViewIfNeeded();
+    await productModelInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+    
+    try {
+      await productModelInput.scrollIntoViewIfNeeded();
+    } catch (e) {
+      console.warn('⚠ Could not scroll Product Model input into view, proceeding anyway');
+      // Try to click it anyway
+      await productModelInput.click({ force: true }).catch(() => {});
+    }
+    
     await productModelInput.click({ clickCount: 3 }).catch(() => { });
     await productModelInput.press('Backspace').catch(() => { });
     await this.page.waitForTimeout(200);
@@ -351,7 +362,7 @@ export class ProductSelectionPage extends BasePage {
    * The LWC card requires a real click (not JS evaluate) on the card border element
    * to trigger the selection state before Confirm becomes active.
    */
-  private async selectSchemeAndConfirm(): Promise<void> {
+  async selectSchemeAndConfirm(requireNavigation: boolean = true): Promise<boolean> {
     // Before click: scheme has defaultSchemeBorder
     // After click: scheme has colorSchemeBorder
     const unselectedCard = this.page.locator('div.scheme.defaultSchemeBorder').first();
@@ -451,9 +462,30 @@ export class ProductSelectionPage extends BasePage {
     if (confirmedVia) {
       console.log(`✓ Clicked Confirm button via: ${confirmedVia}`);
       // Wait for Recommended Schemes to disappear = confirmed navigation away
-      await this.page.getByText('Recommended Schemes', { exact: true })
+      const recommendedSchemes = this.page.getByText('Recommended Schemes', { exact: true });
+      let navigated = await recommendedSchemes
         .waitFor({ state: 'hidden', timeout: 20000 })
-        .catch(() => console.warn('⚠ Recommended Schemes still visible after Confirm — proceeding anyway'));
+        .then(() => true)
+        .catch(() => false);
+
+      if (!navigated) {
+        const confirmText = this.page.getByText('Confirm', { exact: true }).last();
+        await confirmText.click({ force: true });
+        navigated = await recommendedSchemes
+          .waitFor({ state: 'hidden', timeout: 30000 })
+          .then(() => true)
+          .catch(() => false);
+      }
+
+      if (!navigated) {
+        if (requireNavigation) {
+          throw new Error('Scheme confirmation did not navigate away from Recommended Schemes');
+        }
+        return false;
+      }
+      return true;
     }
+
+    return false;
   }
 }

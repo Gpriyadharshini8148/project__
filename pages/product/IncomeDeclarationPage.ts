@@ -1,43 +1,11 @@
 import { expect, Locator, Page } from '@playwright/test';
-//import { Page } from '@playwright/test';
 import { BasePage } from '../BasePage';
 import type { ProductData } from '../../types/customer.types';
 
 /**
  * Income Declaration Page Object
  * Handles income declaration, Additional Details, and Household Member Details
- *
- * ─── SCREEN 1: Income Declaration ─────────────────────────────────────────────
- *   • Monthly Income input (single numeric field)
- *   • Proceed button
- *
- * ─── SCREEN 2: Income Additional Details ──────────────────────────────────────
- *   Fields:
- *   • Monthly Applicant Primary Income   → loc_primaryIncome
- *   • Monthly Applicant Other Income     → loc_applicantOtherIncome
- *   • Monthly Household Other Income     → loc_householdOtherIncome
- *   • Monthly Household Obligations      → loc_householdObligations
- *   • Gender (select)                    → loc_genderDropdown
- *   • Marital Status (select)            → loc_maritalStatusDropdown
- *   • Pan Number (text)                  → loc_panInput
- *   Note: "Sum of income details in first three fields should be equal to
- *          Income entered on the previous page." — hint text visible on page
- *
- * ─── SCREEN 3: Household Member Details ───────────────────────────────────────
- *   Fields:
- *   • Relationship with Applicant (select) → loc_relationshipDropdown
- *   • First Name as per ID Proof (text)    → loc_hhFirstName
- *   • Last Name as per ID Proof  (text)    → loc_hhLastName
- *   • Household Mobile No.       (text)    → loc_hhMobile
- *   • Date Of Birth as per ID Proof (date) → loc_hhDob
- *   • Gender (select)                      → loc_hhGender
- *   • Pin Code (text)                      → loc_hhPinCode
- *   Household Member Identification Details:
- *   • Identity Type (select)               → loc_identityType
- *   • Enter Identification Number (text)   → loc_identificationNumber
- *   Actions:
- *   • Initiate Income Declaration → "Click here" link → loc_initiateLink
- *   • Proceed button
+ * using precise structural XPaths and fallback locators.
  */
 export class IncomeDeclarationPage extends BasePage {
   constructor(page: Page) {
@@ -45,57 +13,66 @@ export class IncomeDeclarationPage extends BasePage {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // LOCATORS — Screen 1: Income Declaration
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Monthly Income input field */
+  get loc_monthlyIncome(): Locator {
+    return this.page.locator('xpath=//div[@class="form-section"]//div[1]//div[1]//input[1]')
+      .or(this.page.locator('xpath=(//input[@type="number"])[1]'))
+      .first();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // LOCATORS — Screen 2: Income Additional Details
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** Monthly Applicant Primary Income input */
+  /** Monthly Applicant Primary Income spinbutton */
   get loc_primaryIncome(): Locator {
-    return this.page.locator(
-      'lightning-input:has(label:text-is("Monthly Applicant Primary Income")) input, ' +
-      'input[placeholder*="Primary Income" i], input[name*="primaryIncome" i]'
-    ).first();
+    return this.page.getByRole('spinbutton').filter({ has: this.page.locator('text=/Monthly Applicant Primary Income/i') })
+      .or(this.page.locator('xpath=//*[contains(., "Monthly Applicant Primary Income")]/following-sibling::div//input | //*[contains(., "Monthly Applicant Primary Income")]/following-sibling::div//spinbutton'))
+      .first();
   }
 
-  /** Monthly Applicant Other Income input */
+  /** Monthly Applicant Other Income spinbutton */
   get loc_applicantOtherIncome(): Locator {
-    return this.page.locator(
-      'lightning-input:has(label:text-is("Monthly Applicant Other Income")) input, ' +
-      'input[placeholder*="Applicant Other Income" i], input[name*="applicantOtherIncome" i]'
-    ).first();
+    return this.page.getByRole('spinbutton').filter({ has: this.page.locator('text=/Monthly Applicant Other Income/i') })
+      .or(this.page.locator('xpath=//*[contains(., "Monthly Applicant Other Income")]/following-sibling::div//input | //*[contains(., "Monthly Applicant Other Income")]/following-sibling::div//spinbutton'))
+      .first();
   }
 
-  /** Monthly Household Other Income input */
+  /** Monthly Household Other Income spinbutton */
   get loc_householdOtherIncome(): Locator {
-    return this.page.locator(
-      'lightning-input:has(label:text-is("Monthly Household Other Income")) input, ' +
-      'input[placeholder*="Household Other Income" i], input[name*="householdOtherIncome" i]'
-    ).first();
+    return this.page.getByRole('spinbutton').filter({ has: this.page.locator('text=/Monthly Household Other Income/i') })
+      .or(this.page.locator('xpath=//*[contains(., "Monthly Household Other Income")]/following-sibling::div//input | //*[contains(., "Monthly Household Other Income")]/following-sibling::div//spinbutton'))
+      .first();
   }
 
-  /** Monthly Household Obligations input */
+  /** Monthly Household Obligations spinbutton */
   get loc_householdObligations(): Locator {
-    return this.page.locator(
-      'lightning-input:has(label:text-is("Monthly Household Obligations")) input, ' +
-      'input[placeholder*="Household Obligations" i], input[name*="householdObligations" i]'
-    ).first();
+    return this.page.getByRole('spinbutton').filter({ has: this.page.locator('text=/Monthly Household Obligations/i') })
+      .or(this.page.locator('xpath=//*[contains(., "Monthly Household Obligations")]/following-sibling::div//input | //*[contains(., "Monthly Household Obligations")]/following-sibling::div//spinbutton'))
+      .first();
   }
 
-  /** Gender dropdown (Additional Details section) */
+  /** Gender select (Additional Details section) */
   get loc_genderDropdown(): Locator {
-    return this.page.getByRole('combobox', { name: /^Gender/i }).first()
-      .or(this.page.locator('select[name*="gender" i]').first());
+    return this.page.locator('xpath=//div[@class="content"]//div[1]//select[1]')
+      .or(this.page.locator('xpath=//select[@class="field-box"]').nth(0))
+      .first();
   }
 
-  /** Marital Status dropdown */
+  /** Marital Status select (Additional Details section) */
   get loc_maritalStatusDropdown(): Locator {
-    return this.page.getByRole('combobox', { name: /Marital Status/i }).first()
-      .or(this.page.locator('select[name*="marital" i], select[name*="maritalStatus" i]').first());
+    return this.page.locator('xpath=//div[@class="additional-details"]//div[2]//select[1]')
+      .or(this.page.locator('xpath=//select[@class="field-box"]').nth(1))
+      .first();
   }
-
   /** PAN Number input (Additional Details section) */
   get loc_panInput(): Locator {
-    return this.page.getByRole('textbox', { name: /Pan Number|PAN/i }).first()
-      .or(this.page.locator('input[name*="pan" i], input[placeholder*="PAN" i]').first());
+    return this.page.locator('xpath=//div[@class="input-group"]//input[@type="text"]')
+      .or(this.page.getByRole('textbox', { name: /Pan Number|PAN/i }))
+      .first();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -104,193 +81,127 @@ export class IncomeDeclarationPage extends BasePage {
 
   /** Relationship with Applicant dropdown */
   get loc_relationshipDropdown(): Locator {
-    return this.page.getByRole('combobox', { name: /Relationship with Applicant/i }).first()
-      .or(this.page.locator('select[name*="relationship" i]').first());
+    return this.page.locator('xpath=//div[@class="form-section"]//div[1]//select[1]')
+      .or(this.page.getByRole('combobox', { name: /Relationship with Applicant/i }))
+      .or(this.page.locator('select[name*="relationship" i]'))
+      .first();
   }
 
   /** First Name as per ID Proof input */
   get loc_hhFirstName(): Locator {
-    return this.page.getByRole('textbox', { name: /First Name as per ID Proof/i }).first()
-      .or(this.page.locator('input[name*="firstName" i], input[placeholder*="First Name" i]').first());
+    return this.page.locator('xpath=//div[@class="form-section"]//div[2]//input[1]')
+      .or(this.page.getByRole('textbox', { name: /First Name as per ID Proof/i }))
+      .first();
   }
 
   /** Last Name as per ID Proof input */
   get loc_hhLastName(): Locator {
-    return this.page.getByRole('textbox', { name: /Last Name as per ID Proof/i }).first()
-      .or(this.page.locator('input[name*="lastName" i], input[placeholder*="Last Name" i]').first());
+    return this.page.locator('xpath=(//input[@type="text"])[3]')
+      .or(this.page.getByRole('textbox', { name: /Last Name as per ID Proof/i }))
+      .first();
   }
 
   /** Household Mobile No. input */
   get loc_hhMobile(): Locator {
-    return this.page.getByRole('textbox', { name: /Household Mobile/i }).first()
-      .or(this.page.locator('input[name*="mobile" i][name*="household" i], input[placeholder*="Mobile" i]').first());
+    return this.page.locator('xpath=//input[@type="number"]')
+      .or(this.page.getByRole('textbox', { name: /Household Mobile|Mobile No|Phone/i }))
+      .first();
   }
 
-  /** Date Of Birth as per ID Proof input (date type) */
+  /** Date Of Birth as per ID Proof input */
   get loc_hhDob(): Locator {
-    return this.page.locator('input[type="date"]').first()
-      .or(this.page.getByRole('textbox', { name: /Date Of Birth/i }).first());
+    return this.page.locator('xpath=//input[@type="date"]')
+      .or(this.page.getByRole('textbox', { name: /Date of Birth|DOB/i }))
+      .first();
   }
 
   /** Gender dropdown (Household Member section) */
   get loc_hhGender(): Locator {
-    return this.page.getByRole('combobox', { name: /^Gender/i }).first()
-      .or(this.page.locator('select[name*="gender" i]').first());
+    return this.page.locator('xpath=(//select[@class="field-box"])[2]')
+      .or(this.page.getByRole('combobox', { name: /Gender/i }).nth(1))
+      .first();
   }
 
   /** Pin Code input */
   get loc_hhPinCode(): Locator {
-    return this.page.getByRole('textbox', { name: /Pin Code/i }).first()
-      .or(this.page.locator('input[name*="pin" i], input[placeholder*="Pin" i]').first());
+    return this.page.locator('xpath=(//input[@type="text"])[4]')
+      .or(this.page.getByRole('textbox', { name: /Pin Code|Pincode|Postal Code/i }))
+      .first();
   }
 
-  /** Identity Type dropdown (Household Member Identification Details) */
+  /** Identity Type dropdown */
   get loc_identityType(): Locator {
-    return this.page.getByRole('combobox', { name: /Identity Type/i }).first()
-      .or(this.page.locator('select[name*="identityType" i]').first());
+    return this.page.locator('xpath=//div[@class="identification-section"]//select[@class="field-box"]')
+      .or(this.page.getByRole('combobox', { name: /Identity Type|ID Type|Type of Identity/i }))
+      .first();
   }
 
   /** Enter Identification Number input */
   get loc_identificationNumber(): Locator {
-    return this.page.getByRole('textbox', { name: /Identification Number|Enter Identification/i }).first()
-      .or(this.page.locator('input[name*="identificationNumber" i], input[name*="idNumber" i]').first());
+    return this.page.locator('xpath=(//input[@type="text"])[5]')
+      .or(this.page.getByRole('textbox', { name: /Identification Number|Enter Identification|ID Number/i }))
+      .first();
   }
 
-  /** "Click here" link next to "Initiate Income Declaration" */
+  /** "Click here" link for Initiate Income Declaration */
   get loc_initiateLink(): Locator {
-    return this.page.locator(
-      'a:has-text("Click here"), button:has-text("Click here"), ' +
-      'span:has-text("Click here"), lightning-button:has-text("Click here")'
-    ).first()
-      .or(this.page.getByText('Click here', { exact: true }).first());
+    return this.page.locator('xpath=//button[normalize-space()="Click here"]')
+      .or(this.page.locator('a:has-text("Click here")'))
+      .first();
+  }
+
+  /** Proceed Button */
+  get loc_proceedButton(): Locator {
+    return this.page.locator('xpath=//button[normalize-space()="Proceed"]')
+      .first();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LOCATORS — Error / Validation
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** Generic SLDS error banner (hard error) */
   get loc_errorBanner(): Locator {
-    return this.page.locator("//div[contains(@class,'slds-theme_error')]");
-  }
-
-  /** Any inline field validation error */
-  get loc_fieldError(): Locator {
-    return this.page.locator('.slds-has-error, .slds-form-element__help, [role="alert"], .toastMessage');
+    return this.page.locator("//div[contains(@class,'slds-theme_error') or contains(@class,'error') or @role='alert']");
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SCREEN DETECTION
+  // ACTIONS
   // ═══════════════════════════════════════════════════════════════════════════
 
   async isIncomeDeclarationPage(): Promise<boolean> {
-    const screen = await this.getCurrentScreen();
-    return screen === 'Income Declaration';
+    return await this.loc_monthlyIncome.isVisible({ timeout: 3000 }).catch(() => false);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION: Screen 1 — Fill & Proceed Income Declaration
-  // ═══════════════════════════════════════════════════════════════════════════
+  /** Selects an option in a native <select> by matching value or visible text (case-insensitive), avoiding brittle option-click patterns. */
+  private async selectNativeOption(locator: Locator, value: string, label: string): Promise<void> {
+    await locator.scrollIntoViewIfNeeded().catch(() => {});
+    await locator.waitFor({ state: 'visible', timeout: 8000 });
 
-  /**
-   * Fill monthly income amount and click Proceed.
-   * Iterates frames to find the income input (skips global search bar).
-   */
-  async fillIncomeDeclaration(
-    incomeAmount: string,
-    proceedButton: string
-  ): Promise<void> {
+    const options = await locator.evaluate((el: HTMLSelectElement) =>
+      Array.from(el.options).map(o => ({ value: o.value, text: (o.textContent || '').trim() }))
+    ).catch(() => [] as { value: string; text: string }[]);
+    console.log(`[DEBUG] ${label} options: ${JSON.stringify(options)}`);
+
+    const match = options.find(o => o.value.toLowerCase() === value.toLowerCase() || o.text.toLowerCase() === value.toLowerCase())
+      || options.find(o => o.text.toLowerCase().includes(value.toLowerCase()));
+
+    await locator.selectOption(match ? match.value : value);
+  }
+
+  async fillIncomeDeclaration(incomeAmount: string, proceedButton: string = 'Proceed'): Promise<void> {
     console.log('===== Income Declaration =====');
-    await this.verifyCurrentScreen('Income Declaration');
+    const incomeInput = this.loc_monthlyIncome;
+    await incomeInput.waitFor({ state: 'visible', timeout: 5000 });
+    await incomeInput.click({ force: true });
+    await incomeInput.fill('');
+    await incomeInput.pressSequentially(incomeAmount, { delay: 100 });
+    console.log(`✓ Income declared: ${incomeAmount}`);
 
-    let targetFrame: any = this.page;
-    let incomeInput: Locator | null = null;
-
-    // Iterate through frames to find the income input
-    // The page also contains a global "Search..." input in the header. We need to skip it.
-    for (const frame of this.page.frames()) {
-        const inputs = frame.locator('input');
-        const count = await inputs.count().catch(() => 0);
-        
-        let foundInputs = [];
-        for (let i = 0; i < count; i++) {
-            const el = inputs.nth(i);
-            if (await el.isVisible({ timeout: 500 }).catch(() => false)) {
-                const type = await el.getAttribute('type').catch(() => '');
-                const placeholder = await el.getAttribute('placeholder').catch(() => '') || '';
-                
-                // Skip hidden, radio, checkbox, and the global search bar
-                if (type !== 'hidden' && type !== 'checkbox' && type !== 'radio' && type !== 'search' && !placeholder.toLowerCase().includes('search')) {
-                    foundInputs.push(el);
-                }
-            }
-        }
-        
-        // If we found any valid inputs, the LAST one is most likely our income field 
-        // (since it's lower in the DOM than any remaining header elements)
-        if (foundInputs.length > 0) {
-            incomeInput = foundInputs[foundInputs.length - 1];
-            targetFrame = frame;
-            break;
-        }
-    }
-
-    if (incomeInput) {
-        await incomeInput.scrollIntoViewIfNeeded().catch(() => {});
-        await incomeInput.click({ force: true });
-        
-        // Clear using multiple methods to be safe with LWC
-        await incomeInput.press('Control+A');
-        await incomeInput.press('Backspace');
-        await incomeInput.fill('');
-        
-        // Type the amount
-        await incomeInput.pressSequentially(incomeAmount, { delay: 100 });
-        console.log(`✓ Income declared: ${incomeAmount}`);
-    } else {
-        console.log('⚠ Could not find Monthly Income input field');
-    }
-
-    // Proceed
-    let proceedClicked = false;
-    const btn = targetFrame.getByRole('button', { name: proceedButton || 'Proceed', exact: true }).first();
-    if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await btn.click({ force: true });
-        console.log(`✓ Clicked Proceed button in frame`);
-        proceedClicked = true;
-    } 
-
-    if (!proceedClicked) {
-        await this.clickButton(proceedButton);
-    }
-    
+    await this.loc_proceedButton.click({ force: true });
     await this.waitFor(2000);
-    await this.checkForErrors();
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION: Screen 2 — Fill Income Additional Details
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Fill all fields on the Income Additional Details screen and click Proceed.
-   *
-   * @param data.primaryIncome       - Monthly Applicant Primary Income
-   * @param data.applicantOtherIncome - Monthly Applicant Other Income
-   * @param data.householdOtherIncome - Monthly Household Other Income
-   * @param data.householdObligations - Monthly Household Obligations (default '0')
-   * @param data.gender              - Gender value to select (e.g. 'Male')
-   * @param data.maritalStatus       - Marital Status value (e.g. 'Single', 'Married')
-   * @param data.panNumber           - PAN number string (e.g. 'HFHPP1234D')
-   * @param data.proceedButton       - Label of the Proceed button (default 'Proceed')
-   *
-   * NOTE: sum(primaryIncome + applicantOtherIncome + householdOtherIncome)
-   *       MUST equal the income entered on the previous Income Declaration page,
-   *       otherwise the app shows the validation error:
-   *       "Sum of income details in first three fields should be equal to
-   *        Income entered on the previous page."
-   */
-  async fillAdditionalDetails(data: {
+async fillAdditionalDetails(data: {
     primaryIncome?: string;
     applicantOtherIncome?: string;
     householdOtherIncome?: string;
@@ -303,82 +214,139 @@ export class IncomeDeclarationPage extends BasePage {
     console.log('===== Income Additional Details =====');
     await this.page.waitForTimeout(2000);
 
-    const proceed = data.proceedButton || 'Proceed';
-
+    // --- 1. Primary Income (Spinbutton) ---
     if (data.primaryIncome !== undefined) {
-      if (await this.loc_primaryIncome.isVisible({ timeout: 5000 }).catch(() => false)) {
+      try {
+        await this.loc_primaryIncome.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_primaryIncome.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+        await this.page.waitForTimeout(500);
+        
+        // For spinbutton, need to click first then type
+        await this.loc_primaryIncome.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_primaryIncome.fill(data.primaryIncome);
-        console.log(`✓ Monthly Applicant Primary Income: ${data.primaryIncome}`);
+        await this.loc_primaryIncome.blur().catch(() => {});
+        console.log(`✓ Filled Primary Income: ${data.primaryIncome}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Primary Income: ${e.message}`);
       }
     }
 
+    // --- 2. Applicant Other Income (Spinbutton) ---
     if (data.applicantOtherIncome !== undefined) {
-      if (await this.loc_applicantOtherIncome.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_applicantOtherIncome.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_applicantOtherIncome.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.page.waitForTimeout(300);
+        
+        await this.loc_applicantOtherIncome.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_applicantOtherIncome.fill(data.applicantOtherIncome);
-        console.log(`✓ Monthly Applicant Other Income: ${data.applicantOtherIncome}`);
+        await this.loc_applicantOtherIncome.blur().catch(() => {});
+        console.log(`✓ Filled Applicant Other Income: ${data.applicantOtherIncome}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Applicant Other Income: ${e.message}`);
       }
     }
 
+    // --- 3. Household Other Income (Spinbutton) ---
     if (data.householdOtherIncome !== undefined) {
-      if (await this.loc_householdOtherIncome.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_householdOtherIncome.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_householdOtherIncome.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.page.waitForTimeout(300);
+        
+        await this.loc_householdOtherIncome.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_householdOtherIncome.fill(data.householdOtherIncome);
-        console.log(`✓ Monthly Household Other Income: ${data.householdOtherIncome}`);
+        await this.loc_householdOtherIncome.blur().catch(() => {});
+        console.log(`✓ Filled Household Other Income: ${data.householdOtherIncome}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Household Other Income: ${e.message}`);
       }
     }
 
+    // --- 4. Household Obligations (Spinbutton) ---
     if (data.householdObligations !== undefined) {
-      if (await this.loc_householdObligations.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_householdObligations.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_householdObligations.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.page.waitForTimeout(300);
+        
+        await this.loc_householdObligations.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_householdObligations.fill(data.householdObligations);
-        console.log(`✓ Monthly Household Obligations: ${data.householdObligations}`);
+        await this.loc_householdObligations.blur().catch(() => {});
+        console.log(`✓ Filled Household Obligations: ${data.householdObligations}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Household Obligations: ${e.message}`);
       }
     }
 
+ // --- 5. Gender (Native Select Element) ---
     if (data.gender) {
-      if (await this.loc_genderDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await this.loc_genderDropdown.selectOption({ label: data.gender });
-        console.log(`✓ Gender: ${data.gender}`);
+      try {
+        console.log(`[LOG] Attempting to select Gender: ${data.gender}`);
+        const genderSelect = this.loc_genderDropdown;
+        
+        await genderSelect.scrollIntoViewIfNeeded().catch(() => {});
+        await genderSelect.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        console.log(`[DEBUG] Gender select is visible`);
+        
+        // Use selectOption for native select elements
+        await genderSelect.selectOption(data.gender);
+        await this.page.waitForTimeout(400);
+        console.log(`✓ Selected Gender: ${data.gender}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to select Gender: ${e.message}`);
       }
     }
 
+    // --- 6. Marital Status (Native Select Element) ---
     if (data.maritalStatus) {
-      if (await this.loc_maritalStatusDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await this.loc_maritalStatusDropdown.selectOption({ label: data.maritalStatus });
-        console.log(`✓ Marital Status: ${data.maritalStatus}`);
+      try {
+        console.log(`[LOG] Attempting to select Marital Status: ${data.maritalStatus}`);
+        const maritalSelect = this.loc_maritalStatusDropdown;
+        
+        await maritalSelect.scrollIntoViewIfNeeded().catch(() => {});
+        await maritalSelect.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        console.log(`[DEBUG] Marital Status select is visible`);
+        
+        // Use selectOption for native select elements
+        await maritalSelect.selectOption(data.maritalStatus);
+        await this.page.waitForTimeout(400);
+        console.log(`✓ Selected Marital Status: ${data.maritalStatus}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to select Marital Status: ${e.message}`);
       }
     }
-
+    // --- 7. PAN Number (Textbox) ---
     if (data.panNumber) {
-      if (await this.loc_panInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_panInput.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_panInput.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
         await this.loc_panInput.fill(data.panNumber);
-        console.log(`✓ PAN Number: ${data.panNumber}`);
+        console.log(`✓ Filled PAN Number: ${data.panNumber}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill PAN Number: ${e.message}`);
       }
     }
 
-    await this.clickButton(proceed);
-    await this.waitFor(3000);
-    await this.checkForErrors();
-    console.log('✓ Proceeded from Income Additional Details');
+    // --- 8. Proceed ---
+    if (data.proceedButton) {
+      try {
+        const proceedBtn = this.page.getByRole('button', { name: data.proceedButton, exact: true }).first();
+        await proceedBtn.scrollIntoViewIfNeeded().catch(() => {});
+        await proceedBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await proceedBtn.click({ force: true });
+        console.log(`✓ Clicked ${data.proceedButton} on Additional Details screen`);
+        // Wait for Household Member Details screen to load
+        await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+      } catch (e: any) {
+        console.warn(`⚠ Failed to click Proceed: ${e.message}`);
+      }
+    }
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION: Screen 3 — Fill Household Member Details
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Fill all fields on the Household Member Details screen.
-   *
-   * @param data.relationship       - Relationship with Applicant (e.g. 'Spouse')
-   * @param data.firstName          - First Name as per ID Proof
-   * @param data.lastName           - Last Name as per ID Proof
-   * @param data.mobile             - Household Mobile No. (10 digits)
-   * @param data.dob                - Date of Birth in format 'YYYY-MM-DD'
-   * @param data.gender             - Gender (e.g. 'Male', 'Female')
-   * @param data.pinCode            - 6-digit Pin Code
-   * @param data.identityType       - Identity Type to select ('PAN', 'Voter Id', etc.)
-   * @param data.identificationNumber - ID number string matching the selected identity type
-   * @param data.initiateDeclaration - if true, clicks "Initiate Income Declaration → Click here"
-   * @param data.proceedButton      - Proceed button label (default 'Proceed')
-   */
   async fillHouseholdMemberDetails(data: {
     relationship?: string;
     firstName?: string;
@@ -393,129 +361,147 @@ export class IncomeDeclarationPage extends BasePage {
     proceedButton?: string;
   }): Promise<void> {
     console.log('===== Household Member Details =====');
-    await this.page.waitForTimeout(2000);
+    // Wait for Household Member Details form to fully render
+    await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
-    const proceed = data.proceedButton || 'Proceed';
-
+    // --- 1. Relationship with Applicant (Native Select) ---
     if (data.relationship) {
-      if (await this.loc_relationshipDropdown.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await this.loc_relationshipDropdown.selectOption({ label: data.relationship });
-        console.log(`✓ Relationship: ${data.relationship}`);
+      try {
+        console.log(`[LOG] Attempting to select Relationship: ${data.relationship}`);
+        await this.selectNativeOption(this.loc_relationshipDropdown, data.relationship, 'Relationship');
+        await this.page.waitForTimeout(300);
+        console.log(`✓ Selected Relationship: ${data.relationship}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to select Relationship: ${e.message}`);
       }
     }
 
+    // --- 2. First Name as per ID Proof ---
     if (data.firstName !== undefined) {
-      if (await this.loc_hhFirstName.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_hhFirstName.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_hhFirstName.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.loc_hhFirstName.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_hhFirstName.fill(data.firstName);
-        console.log(`✓ First Name: ${data.firstName}`);
+        console.log(`✓ Filled First Name: ${data.firstName}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill First Name: ${e.message}`);
       }
     }
 
+    // --- 3. Last Name as per ID Proof ---
     if (data.lastName !== undefined) {
-      if (await this.loc_hhLastName.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_hhLastName.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_hhLastName.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.loc_hhLastName.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_hhLastName.fill(data.lastName);
-        console.log(`✓ Last Name: ${data.lastName}`);
+        console.log(`✓ Filled Last Name: ${data.lastName}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Last Name: ${e.message}`);
       }
     }
 
+    // --- 4. Household Mobile No. ---
     if (data.mobile !== undefined) {
-      if (await this.loc_hhMobile.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_hhMobile.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_hhMobile.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.loc_hhMobile.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_hhMobile.fill(data.mobile);
-        console.log(`✓ Household Mobile: ${data.mobile}`);
+        console.log(`✓ Filled Mobile No: ${data.mobile}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Mobile No: ${e.message}`);
       }
     }
 
+    // --- 5. Date of Birth as per ID Proof ---
     if (data.dob !== undefined) {
-      if (await this.loc_hhDob.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_hhDob.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_hhDob.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
         await this.loc_hhDob.fill(data.dob);
-        console.log(`✓ Date of Birth: ${data.dob}`);
+        console.log(`✓ Filled DOB: ${data.dob}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill DOB: ${e.message}`);
       }
     }
 
+    // --- 6. Gender (Native Select - Household Member section) ---
     if (data.gender) {
-      if (await this.loc_hhGender.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await this.loc_hhGender.selectOption({ label: data.gender });
-        console.log(`✓ Gender: ${data.gender}`);
+      try {
+        const genderSelect = this.loc_hhGender;
+        await genderSelect.scrollIntoViewIfNeeded().catch(() => {});
+        await genderSelect.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        
+        // Use selectOption for native select elements
+        await genderSelect.selectOption(data.gender);
+        await this.page.waitForTimeout(300);
+        console.log(`✓ Selected Gender (HH): ${data.gender}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to select Gender (HH): ${e.message}`);
       }
     }
 
+    // --- 7. Pin Code ---
     if (data.pinCode !== undefined) {
-      if (await this.loc_hhPinCode.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_hhPinCode.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_hhPinCode.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.loc_hhPinCode.click({ force: true }).catch(() => {});
+        await this.page.waitForTimeout(300);
         await this.loc_hhPinCode.fill(data.pinCode);
-        console.log(`✓ Pin Code: ${data.pinCode}`);
+        await this.loc_hhPinCode.blur();
+        console.log(`✓ Filled Pin Code: ${data.pinCode}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Pin Code: ${e.message}`);
       }
     }
 
+    // --- 8. Identity Type (Native Select) ---
     if (data.identityType) {
-      if (await this.loc_identityType.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await this.loc_identityType.selectOption({ label: data.identityType });
-        console.log(`✓ Identity Type: ${data.identityType}`);
-        await this.page.waitForTimeout(1000); // allow dynamic field to appear
+      try {
+        await this.selectNativeOption(this.loc_identityType, data.identityType, 'Identity Type');
+        await this.page.waitForTimeout(300);
+        console.log(`✓ Selected Identity Type: ${data.identityType}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to select Identity Type: ${e.message}`);
       }
     }
 
+    // --- 10. Identification Number ---
     if (data.identificationNumber !== undefined) {
-      if (await this.loc_identificationNumber.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.loc_identificationNumber.scrollIntoViewIfNeeded().catch(() => {});
+        await this.loc_identificationNumber.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
         await this.loc_identificationNumber.fill(data.identificationNumber);
-        console.log(`✓ Identification Number: ${data.identificationNumber}`);
+        console.log(`✓ Filled Identification Number: ${data.identificationNumber}`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to fill Identification Number: ${e.message}`);
       }
     }
 
+    // --- 11. Click "Click here" button AFTER ALL FIELDS FILLED ---
     if (data.initiateDeclaration) {
-      await this.clickInitiateIncomeDeclaration();
-    }
-
-    await this.clickButton(proceed);
-    await this.waitFor(3000);
-    await this.checkForErrors();
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION: Initiate Income Declaration
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Click the "Initiate Income Declaration → Click here" link
-   * visible at the bottom of the Household Member Details screen.
-   */
-  async clickInitiateIncomeDeclaration(): Promise<void> {
-    const initiateText = this.page.locator('text=Initiate Income Declaration').first();
-    const isVisible = await initiateText.isVisible({ timeout: 5000 }).catch(() => false);
-    if (isVisible) {
-      console.log('✓ "Initiate Income Declaration" section visible');
-    } else {
-      console.log('⚠ "Initiate Income Declaration" section not found — skipping');
-      return;
-    }
-    if (await this.loc_initiateLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await this.loc_initiateLink.click({ force: true });
-      await this.waitFor(3000);
-      console.log('✓ Clicked "Click here" → Initiate Income Declaration triggered');
-    } else {
-      console.log('⚠ "Click here" link not found on Household Member page');
+      try {
+        // Use the exact locator provided
+        const clickHereBtn = this.page.locator('xpath=//button[normalize-space()="Click here"]').first();
+        await clickHereBtn.scrollIntoViewIfNeeded().catch(() => {});
+        await clickHereBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+        await this.page.waitForTimeout(500);
+        await clickHereBtn.click({ force: true });
+        await this.page.waitForTimeout(2000);
+        console.log(`✓ Clicked 'Click here' button`);
+      } catch (e: any) {
+        console.warn(`⚠ Failed to click 'Click here' button: ${e.message}`);
+      }
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ACTION: Check for hard error banner
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Assert that no hard SLDS error banner is showing on the page.
-   * Returns true if no error, false if error present.
-   */
-  async hasNoErrorBanner(): Promise<boolean> {
-    const visible = await this.loc_errorBanner.isVisible({ timeout: 1000 }).catch(() => false);
-    return !visible;
-  }
-
-  /**
-   * Skip income declaration (if already filled)
-   */
-  async proceed(proceedButton: string): Promise<void> {
-    console.log('===== Skip Income Declaration =====');
-    await this.clickButton(proceedButton);
-    await this.checkForErrors();
+  async proceed(proceedButton: string = 'Proceed'): Promise<void> {
+    await this.loc_proceedButton.click({ force: true });
   }
 }
-

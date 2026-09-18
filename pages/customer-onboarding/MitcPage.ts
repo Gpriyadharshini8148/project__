@@ -44,16 +44,16 @@ export class MitcPage extends BasePage {
       await loc.fill(value, { force: true });
     };
 
-    const firstNameLoc = this.page.locator("xpath=//label[contains(text(), 'First Name')]//..//input").filter({ state: 'visible' }).first();
+    const firstNameLoc = this.page.locator("xpath=//label[contains(text(), 'First Name')]//..//input").filter({ visible: true}).first();
     await clearAndFill(firstNameLoc, firstName, 'Enter first name');
 
-    const middleNameLoc = this.page.locator("xpath=//label[contains(text(), 'Middle Name')]//..//input").filter({ state: 'visible' }).first();
+    const middleNameLoc = this.page.locator("xpath=//label[contains(text(), 'Middle Name')]//..//input").filter({ visible: true }).first();
     if (await middleNameLoc.isVisible({ timeout: 1000 }).catch(() => false)) {
       console.log('Clearing middle name to prevent validation errors');
       await clearAndFill(middleNameLoc, '', 'Clear middle name');
     }
 
-    const lastNameLoc = this.page.locator("xpath=//label[contains(text(), 'Last Name')]//..//input").filter({ state: 'visible' }).first();
+    const lastNameLoc = this.page.locator("xpath=//label[contains(text(), 'Last Name')]//..//input").filter({ visible: true }).first();
     await clearAndFill(lastNameLoc, lastName, 'Enter last name');
 
     // Proceed

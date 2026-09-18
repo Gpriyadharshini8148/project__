@@ -260,6 +260,106 @@ export class KycPage extends BasePage {
     // await this.waitFor(600);
 }
 
+  /**
+   * Complete Aadhar OTP / VKYC verification
+   */
+  async selectAadharOTP(
+    bypassReason: string, 
+    saveButton: string, 
+    proceedButton: string
+  ): Promise<void> {
+    console.log('===== Aadhar OTP / VKYC Page =====');
+    await this.verifyCurrentScreen('KYC');
+
+    // Select Aadhar OTP / VKYC radio button
+    const aadharOtpCandidates = [
+      this.page.getByRole('radio', { name: /aadhar otp|aadhar.*vkyc|vkyc/i }).first(),
+      this.page.getByLabel(/aadhar otp|aadhar.*vkyc|vkyc/i).first(),
+      this.page.getByText(/aadhar otp|aadhar.*vkyc|vkyc/i).first(),
+      this.page.locator('input[value*="aadhar" i], input[value*="vkyc" i], input[value*="otp" i]').first(),
+      this.page.locator('label').filter({ hasText: /aadhar otp|aadhar.*vkyc|vkyc/i }).first().locator('input').first(),
+    ];
+
+    let aadharOtpRadio: any = null;
+    for (const candidate of aadharOtpCandidates) {
+      const count = await candidate.count().catch(() => 0);
+      if (count) {
+        aadharOtpRadio = candidate;
+        break;
+      }
+    }
+
+    if (!aadharOtpRadio) {
+      throw new Error('Aadhar OTP / VKYC radio button was not found on the KYC page.');
+    }
+
+    await aadharOtpRadio.click({ force: true }).catch(async () => {
+      await aadharOtpRadio.check({ force: true }).catch(() => aadharOtpRadio.click({ force: true }));
+    });
+    console.log('✓ Selected Aadhar OTP / VKYC radio button');
+
+    // Click Initiate button
+    const initiateButton = this.page.getByRole('button', { name: /initiate/i }).first();
+    await initiateButton.click({ force: true }).catch(async () => {
+      await this.page.getByText(/initiate/i).first().click({ force: true });
+    });
+    console.log('✓ Clicked Initiate button');
+
+    // Wait for the dropdown to become enabled
+    const bypassDropdown = this.page.getByLabel(/bypass reason/i).first();
+    const fallbackDropdown = this.page.locator('select, [role="combobox"]').filter({ hasText: /bypass reason/i }).first();
+
+    const targetDropdown = (await bypassDropdown.count().catch(() => 0)) ? bypassDropdown : fallbackDropdown;
+    
+    console.log('⏳ Waiting for Bypass Reason dropdown to become enabled...');
+    let bypassFound = false;
+    
+    // Wait for dropdown to enable
+    for (let i = 0; i < 15; i++) {
+      if (await targetDropdown.isEnabled({ timeout: 1000 }).catch(() => false)) {
+        bypassFound = true;
+        break;
+      }
+      await this.page.waitForTimeout(2000);
+    }
+
+    if (!bypassFound) {
+      console.warn('⚠ Bypass Reason dropdown did not enable within 30s.');
+    }
+
+    // Select bypass reason
+    if (await targetDropdown.count().catch(() => 0)) {
+      if (await targetDropdown.isEnabled({ timeout: 10000 }).catch(() => false)) {
+        await targetDropdown.selectOption({ label: bypassReason }).catch(async () => {
+          await targetDropdown.selectOption({ value: bypassReason });
+        });
+        console.log(`✓ Selected bypass reason: ${bypassReason}`);
+      }
+    } else {
+      console.warn('⚠ Bypass reason dropdown not found.');
+    }
+
+    // Click Save
+    await this.clickActionButton(saveButton);
+    await this.waitFor(1000);
+    console.log('✓ Clicked Save button');
+
+    // Wait for Proceed button to be enabled
+    const proceedBtn = this.page.getByRole('button', { name: new RegExp(proceedButton, 'i') }).first();
+    await proceedBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    for (let i = 0; i < 20; i++) {
+      const disabled = await proceedBtn.getAttribute('disabled').catch(() => 'true');
+      if (disabled === null) break;
+      await this.page.waitForTimeout(1000);
+    }
+
+    // Click Proceed
+    await this.clickActionButton(proceedButton);
+    await this.waitFor(1000);
+    await this.checkForErrors();
+    console.log('✓ Aadhar OTP / VKYC completed');
+  }
+
   async selectKycOption(option: string): Promise<void> {
     const optionRadio = this.page.getByRole('radio', { name: new RegExp(option, 'i') }).first();
     const fallback = this.page.locator(`input[value="${option}" i], input[name*="${option}" i], label:has-text("${option}")`).first();

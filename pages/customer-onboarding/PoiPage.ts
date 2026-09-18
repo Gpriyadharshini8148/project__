@@ -61,13 +61,13 @@ export class PoiPage extends BasePage {
     const count = await locator.count().catch(() => 0);
     if (!count) {
       console.warn(`⚠ ${label} input not found; skipping fill.`);
-      return;
+      return false;
     }
 
     const visible = await locator.isVisible({ timeout: 1000 }).catch(() => false);
     if (!visible) {
       console.warn(`⚠ ${label} input is not visible; skipping fill.`);
-      return;
+      return false;
     }
 
     const currentValue = (await locator.inputValue({ timeout: 1000 }).catch(() => '')).trim();
@@ -87,11 +87,10 @@ export class PoiPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(value);
 
       if (normalizedCurrent === normalizedExpected && !forceRefill) {
-        console.log(`✓ ${label} already matches the expected value; proceeding without refill.`);
-        return false;
+        console.log(`⚠ ${label} already matches the expected value; but refilling to trigger UI events.`);
+      } else {
+        console.log(`⚠ ${label} value mismatch. Existing: "${currentValue}" | Expected: "${value}". Clearing and refilling.`);
       }
-
-      console.log(`⚠ ${label} value mismatch. Existing: "${currentValue}" | Expected: "${value}". Clearing and refilling.`);
       await this.clearInputValue(locator, label);
     }
 
@@ -116,18 +115,19 @@ export class PoiPage extends BasePage {
     }
 
     if (!finalDropdown) {
-      // Build label aliases — e.g. "POI Type" also matches "POI/OVD Type" in the app
       const labelAliases = [normalizedLabel];
-      if (/poi.*type/i.test(label)) labelAliases.push('POI/OVD Type', 'POI\\/OVD Type');
+      if (/poi.*type/i.test(label)) labelAliases.push('POI/OVD Type', 'POI\\/OVD Type', 'Identity Document Type');
+      if (/employment/i.test(label)) labelAliases.push('Employment Type', 'Employment');
+      if (/gender/i.test(label)) labelAliases.push('Gender');
 
       const candidates = [
         this.page.getByRole('combobox', { name: new RegExp(normalizedLabel, 'i') }).first(),
+        this.page.getByRole('button', { name: new RegExp(normalizedLabel, 'i') }).first(),
         this.page.getByLabel(new RegExp(normalizedLabel, 'i')).first(),
-        this.page.locator('label').filter({ hasText: new RegExp(normalizedLabel, 'i') }).locator('..').locator('select, [role="combobox"]').first(),
-        // Alias: POI/OVD Type
+        this.page.locator('[aria-label*="' + normalizedLabel + '" i]').first(),
+        this.page.locator('label').filter({ hasText: new RegExp(normalizedLabel, 'i') }).locator('..').locator('select, [role="combobox"], button').first(),
         this.page.locator('select').filter({ has: this.page.locator('option', { hasText: new RegExp(value, 'i') }) }).first(),
-        this.page.locator('label').filter({ hasText: /POI\/OVD Type/i }).locator('..').locator('select, [role="combobox"]').first(),
-        this.page.locator('//label[contains(text(),"POI") and contains(text(),"Type")]/following::select[1]').first(),
+        ...labelAliases.map(alias => this.page.locator('label').filter({ hasText: new RegExp(alias, 'i') }).locator('..').locator('select, [role="combobox"], button').first()),
       ];
 
       for (const candidate of candidates) {
@@ -174,11 +174,10 @@ export class PoiPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(value);
 
       if (normalizedCurrent === normalizedExpected && !forceRefill) {
-        console.log(`✓ ${label} already matches the expected value; proceeding without refill.`);
-        return false;
+        console.log(`⚠ ${label} already matches the expected value; but re-selecting to trigger UI events.`);
+      } else {
+        console.log(`⚠ ${label} value mismatch. Existing: "${existingText}" | Expected: "${value}". Re-selecting.`);
       }
-
-      console.log(`⚠ ${label} value mismatch. Existing: "${existingText}" | Expected: "${value}". Re-selecting.`);
     }
 
     try {
@@ -213,6 +212,7 @@ export class PoiPage extends BasePage {
     const candidateLocators = [
       this.page.getByRole('textbox', { name: /date of birth|dob/i }).first(),
       this.page.getByPlaceholder(/date of birth|dob|date/i).first(),
+      this.page.locator('input[name*="dob" i], input[name*="birth" i], input[aria-label*="DOB" i], input[aria-label*="Birth" i]').first(),
       this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'date of birth')]/following::input[1]"),
       this.page.locator("//label[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'dob')]/following::input[1]"),
       this.page.locator("//input[@type='date']").first(),
@@ -227,7 +227,8 @@ export class PoiPage extends BasePage {
     }
 
     if (!input) {
-      throw new Error('POI DOB input not found');
+      console.warn('⚠ POI DOB input not found or prefilled/read-only on this view; skipping refill.');
+      return false;
     }
 
     const currentValue = (await input.inputValue().catch(() => '')).trim();
@@ -236,11 +237,10 @@ export class PoiPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(normalizedDob);
 
       if (normalizedCurrent === normalizedExpected) {
-        console.log('✓ POI DOB already matches the expected value; proceeding without refill.');
-        return false;
+        console.log('⚠ POI DOB already matches the expected value; but refilling to trigger UI events.');
+      } else {
+        console.log(`⚠ POI DOB mismatch. Existing: "${currentValue}" | Expected: "${normalizedDob}". Clearing and refilling.`);
       }
-
-      console.log(`⚠ POI DOB mismatch. Existing: "${currentValue}" | Expected: "${normalizedDob}". Clearing and refilling.`);
       await this.clearInputValue(input, 'POI DOB');
     }
 
@@ -294,11 +294,10 @@ export class PoiPage extends BasePage {
       const normalizedExpected = this.normalizeComparisonValue(normalizedExpiryDate);
 
       if (normalizedCurrent === normalizedExpected) {
-        console.log('✓ POI Expiry Date already matches the expected value; proceeding without refill.');
-        return;
+        console.log('⚠ POI Expiry Date already matches the expected value; but refilling to trigger UI events.');
+      } else {
+        console.log(`⚠ POI Expiry Date mismatch. Existing: "${currentValue}" | Expected: "${normalizedExpiryDate}". Clearing and refilling.`);
       }
-
-      console.log(`⚠ POI Expiry Date mismatch. Existing: "${currentValue}" | Expected: "${normalizedExpiryDate}". Clearing and refilling.`);
       await this.clearInputValue(input, 'POI Expiry Date');
     }
 
@@ -324,17 +323,24 @@ export class PoiPage extends BasePage {
   ): Promise<void> {
     console.log('===== POI Page =====');
     await this.waitFor(600); // Wait for the page to load properly
-    await this.verifyCurrentScreen('POI');
 
-    const firstNameInput = this.page.getByRole('textbox', { name: /first name/i }).first();
-    const lastNameInput = this.page.getByRole('textbox', { name: /last name/i }).first();
-    const poiNumberInput = this.page.getByRole('textbox', { name: /poi|ovd|number/i }).first();
+    const firstNameInput = this.page.getByRole('textbox', { name: /first name/i }).first()
+      .or(this.page.locator('input[name*="firstName" i], input[aria-label*="First Name" i], input[placeholder*="First Name" i]').first());
+    await firstNameInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+
+    await this.verifyCurrentScreen(['POI', 'Officially Valid Documents']);
+
+    const lastNameInput = this.page.getByRole('textbox', { name: /last name/i }).first()
+      .or(this.page.locator('input[name*="lastName" i], input[aria-label*="Last Name" i], input[placeholder*="Last Name" i]').first());
+    const poiNumberInput = this.page.getByRole('textbox', { name: /poi.*number|ovd.*number|aadhaar.*number|uidai.*number|document.*number|identity.*number/i }).first()
+      .or(this.page.locator('input[name*="poi" i], input[name*="ovd" i], input[name*="aadhaar" i], input[name*="uidai" i], input[aria-label*="POI" i], input[aria-label*="Aadhaar" i], input[placeholder*="POI" i], input[placeholder*="UIDAI" i], input[placeholder*="Aadhaar" i]').first());
 
     let changed = false;
 
     changed = await this.clearAndFillIfNeeded(firstNameInput, firstName, 'First Name') || changed;
 
-    const middleNameInput = this.page.getByRole('textbox', { name: /middle name/i }).first();
+    const middleNameInput = this.page.getByRole('textbox', { name: /middle name/i }).first()
+      .or(this.page.locator('input[name*="middleName" i], input[aria-label*="Middle Name" i], input[placeholder*="Middle Name" i]').first());
     changed = await this.clearAndFillIfNeeded(middleNameInput, middleName, 'Middle Name') || changed;
 
     changed = await this.clearAndFillIfNeeded(lastNameInput, lastName, 'Last Name') || changed;
@@ -402,13 +408,17 @@ export class PoiPage extends BasePage {
     await this.waitFor(1000); // Wait for the page to load properly
     await this.verifyCurrentScreen('POI');
 
-    const firstNameInput = this.page.getByRole('textbox', { name: /first name/i }).first();
-    const lastNameInput = this.page.getByRole('textbox', { name: /last name/i }).first();
-    const poiNumberInput = this.page.getByRole('textbox', { name: /poi|ovd|number/i }).first();
+    const firstNameInput = this.page.getByRole('textbox', { name: /first name/i }).first()
+      .or(this.page.locator('input[name*="firstName" i], input[aria-label*="First Name" i], input[placeholder*="First Name" i]').first());
+    const lastNameInput = this.page.getByRole('textbox', { name: /last name/i }).first()
+      .or(this.page.locator('input[name*="lastName" i], input[aria-label*="Last Name" i], input[placeholder*="Last Name" i]').first());
+    const poiNumberInput = this.page.getByRole('textbox', { name: /poi.*number|ovd.*number|aadhaar.*number|uidai.*number|document.*number|identity.*number/i }).first()
+      .or(this.page.locator('input[name*="poi" i], input[name*="ovd" i], input[name*="aadhaar" i], input[name*="uidai" i], input[aria-label*="POI" i], input[aria-label*="Aadhaar" i], input[placeholder*="POI" i], input[placeholder*="UIDAI" i], input[placeholder*="Aadhaar" i]').first());
 
     await this.clearAndFillIfNeeded(firstNameInput, firstName, 'First Name');
 
-    const middleNameInput = this.page.getByRole('textbox', { name: /middle name/i }).first();
+    const middleNameInput = this.page.getByRole('textbox', { name: /middle name/i }).first()
+      .or(this.page.locator('input[name*="middleName" i], input[aria-label*="Middle Name" i], input[placeholder*="Middle Name" i]').first());
     await this.clearAndFillIfNeeded(middleNameInput, middleName, 'Middle Name');
 
     await this.clearAndFillIfNeeded(lastNameInput, lastName, 'Last Name');

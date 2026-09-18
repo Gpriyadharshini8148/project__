@@ -47,7 +47,7 @@ test.describe('02 - App Status', () => {
     // Navigate directly to Search Dealer page — no login needed.
     await dealerSearchPage.navigateToSearchDealer();
 
-    const mobileNumber = '5675435678';
+    const mobileNumber = '5678654324';
     await dealerSearchPage.selectDealerAndSearch(
       getDealerValue(),
       testData['mobilenumberlabel'] || 'Mobile Number',
@@ -236,110 +236,73 @@ test.describe('02 - App Status', () => {
 // Comment out 'test.skip' → 'test' to activate each scenario
 // ==========================================
 
-// test.skip('Positive: Verify NTB (New to Bank) customer creation flow.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   // NTB = customer mobile number not previously seen → new application flow
-//   const ntbMobile = '9000000001'; // A mobile number not previously registered
+test('Positive: Verify NTB (New to Bank) customer creation flow.', async ({ page, dealerSearchPage, appStatusPage }) => {
+  // NTB = customer mobile number not previously seen → new application flow
+  const ntbMobile = '9000000001'; // A mobile number not previously registered
 
-//   await test.step('Navigate to Search Dealer and search with NTB mobile', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(
-//       getDealerValue(),
-//       testData['mobilenumberlabel'] || 'Mobile Number',
-//       ntbMobile,
-//       testData['searchbutton'] || 'Search'
-//     );
-//     await page.waitForTimeout(3000);
-//   });
-
-
-
-
-// test.skip('Negative: Attempt to submit the application status form empty.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Navigate to search page without entering any data', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     // Directly click Search without selecting dealer or entering mobile
-//     const searchBtn = page.getByRole('button', { name: /^Search$/i }).last();
-//     await searchBtn.waitFor({ state: 'visible', timeout: 10000 });
-//     await searchBtn.click({ force: true });
-//     await page.waitForTimeout(2000);
-//   });
-
-//   await test.step('Verify validation error when form submitted empty', async () => {
-//     // Either a toast, inline error, or we remain on the same page
-//     const errorLocator = page.locator('.slds-has-error, .toastMessage, [role="alert"], .errorMessage').first();
-//     const isError = await errorLocator.isVisible({ timeout: 5000 }).catch(() => false);
-//     const isOnSearchPage = await page.getByRole('button', { name: /^Search$/i }).isVisible({ timeout: 5000 }).catch(() => false);
-
-//     expect(isError || isOnSearchPage).toBe(true);
-//     const errorMsg = isError ? await errorLocator.textContent() : 'stayed on search page (correct behavior)';
-//     console.log(`✓ Empty form submission handled: ${errorMsg?.trim()}`);
-//   });
-// });
+  await test.step('Navigate to Search Dealer and search with NTB mobile', async () => {
+    await dealerSearchPage.navigateToSearchDealer();
+    await dealerSearchPage.selectDealerAndSearch(
+      getDealerValue(),
+      testData['mobilenumberlabel'] || 'Mobile Number',
+      ntbMobile,
+      testData['searchbutton'] || 'Search'
+    );
+    await page.waitForTimeout(3000);
+  });
+});
 
 
-//   await test.step('Detect OTP screen and verify OTP field is present', async () => {
-//     const otpField = page.locator('input[placeholder*="OTP"], input[maxlength="6"], input[type="number"][maxlength]').first();
-//     const otpHeading = page.getByText(/Enter OTP|OTP Verification|Verify OTP|Mobile Verification/i).first();
-//     const isOtpScreen = await otpField.isVisible({ timeout: 10000 }).catch(() => false);
-//     const isOtpHeading = await otpHeading.isVisible({ timeout: 10000 }).catch(() => false);
+test('Negative: Attempt to submit the application status form empty.', async ({ page, dealerSearchPage, appStatusPage }) => {
+  await test.step('Navigate to search page without entering any data', async () => {
+    await dealerSearchPage.navigateToSearchDealer();
+    // Directly click Search without selecting dealer or entering mobile
+    const searchBtn = page.getByRole('button', { name: /^Search$/i }).last();
+    await searchBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await searchBtn.click({ force: true });
+    await page.waitForTimeout(2000);
+  });
 
-//     if (isOtpScreen || isOtpHeading) {
-//       console.log('✓ OTP screen detected with OTP input field');
-//       // Enter test OTP (in a test environment, OTP is typically fixed/mocked)
-//       const testOtp = testData['testotp'] || '123456';
-//       if (isOtpScreen) {
-//         await otpField.fill(testOtp);
-//         await page.waitForTimeout(1000);
-//         const submitOtp = page.getByRole('button', { name: /Submit|Verify|Confirm/i }).first();
-//         if (await submitOtp.isVisible({ timeout: 3000 }).catch(() => false)) {
-//           await submitOtp.click();
-//           await page.waitForTimeout(3000);
-//           console.log(`✓ OTP "${testOtp}" entered and submitted`);
-//         }
-//       }
-//     } else {
-//       console.log('ℹ OTP screen not triggered for this mobile (may be a pre-verified number)');
-//     }
-//   });
-// });
+  await test.step('Verify validation error when form submitted empty', async () => {
+    // Either a toast, inline error, or we remain on the same page
+    const errorLocator = page.locator('.slds-has-error, .toastMessage, [role="alert"], .errorMessage').first();
+    const isError = await errorLocator.isVisible({ timeout: 5000 }).catch(() => false);
+    const isOnSearchPage = await page.getByRole('button', { name: /^Search$/i }).isVisible({ timeout: 5000 }).catch(() => false);
+
+    expect(isError || isOnSearchPage).toBe(true);
+    const errorMsg = isError ? await errorLocator.textContent() : 'stayed on search page (correct behavior)';
+    console.log(`✓ Empty form submission handled: ${errorMsg?.trim()}`);
+  });
+});
 
 
-// test.skip('Positive: Verify the back button navigates to the Dealer Search page.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Navigate to App Status page via dealer search', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(
-//       getDealerValue(),
-//       testData['mobilenumberlabel'] || 'Mobile Number',
-//       '5675435678',
-//       testData['searchbutton'] || 'Search'
-//     );
-//     await page.waitForTimeout(3000);
-//     const isAppStatus = await page.getByText(testData['appstatuspagename'] || 'App Status').isVisible({ timeout: 10000 }).catch(() => false);
-//     console.log(`App Status visible: ${isAppStatus}`);
-//   });
+test('Positive: Verify the back button navigates back to App Status.', async ({ page, dealerSearchPage, appStatusPage }) => {
+  await test.step('Navigate to App Status page via dealer search', async () => {
+    await completePrerequisites({ dealerSearchPage });
+    await page.waitForTimeout(1000);
+  });
 
-//   await test.step('Click Back button and verify return to Dealer Search', async () => {
-//     // Look for Back button on App Status page
-//     const backBtn = page.getByRole('button', { name: /Back|Go Back|Previous/i }).first()
-//       .or(page.locator('a[title*="Back"], button[aria-label*="Back"]').first());
-//     const hasBackBtn = await backBtn.isVisible({ timeout: 5000 }).catch(() => false);
+  await test.step('Proceed from App Status to the next screen', async () => {
+    await appStatusPage.proceedFromAppStatus(
+      testData['appstatuspagename'] || 'App Status',
+      testData['proceedbuttonvalue'] || 'Proceed'
+    );
+    await page.waitForTimeout(2000);
+  });
 
-//     if (hasBackBtn) {
-//       await backBtn.click();
-//       await page.waitForTimeout(3000);
-//       // Verify we are back on the Search Dealer page
-//       const searchPageLocator = page.getByRole('combobox', { name: /Dealer/i }).first()
-//         .or(page.getByRole('button', { name: /^Search$/i }).first());
-//       const isOnSearch = await searchPageLocator.isVisible({ timeout: 10000 }).catch(() => false);
-//       expect(isOnSearch).toBe(true);
-//       console.log('✓ Back button navigated to Dealer Search page successfully');
-//     } else {
-//       // Try browser back
-//       await page.goBack();
-//       await page.waitForTimeout(2000);
-//       const isOnSearch = await page.getByRole('combobox', { name: /Dealer/i }).isVisible({ timeout: 5000 }).catch(() => false);
-//       console.log(`ℹ No Back button found; browser back result: ${isOnSearch ? 'returned to search' : 'unknown page'}`);
-//     }
-//   });
-// });
+  await test.step('Click Back button and verify return to App Status', async () => {
+    const backBtn = page.getByRole('button', { name: /^Back$/i }).first();
+    await expect(backBtn).toBeVisible({ timeout: 10000 });
+    await backBtn.click({ force: true });
+    await page.waitForTimeout(2000);
+
+    const appStatusHeading = page.getByText(/^App Status$/i).first();
+    const proceedButton = page.getByRole('button', { name: /^Proceed$/i }).first();
+    const isOnAppStatus = await appStatusHeading.isVisible({ timeout: 10000 }).catch(() => false)
+      || await proceedButton.isVisible({ timeout: 10000 }).catch(() => false);
+
+    expect(isOnAppStatus).toBe(true);
+    console.log('✓ Back button navigated back to App Status successfully');
+  });
+});
 });

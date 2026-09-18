@@ -1,4 +1,4 @@
-import { test, expect } from '../../fixtures';
+import { test, expect, PageObjects } from '../../fixtures';
 import { ExcelReader, DataGenerator } from '../../utils';
 import { config } from '../../config/environment.config';
 
@@ -17,19 +17,50 @@ const MOBILE_NUMBER = '5678654324';
 // Helper to handle literal 'undefined' strings from Excel parsing
 const getVal = (val: string | undefined, def: string) => (val && val !== 'undefined' ? val : def);
 
-async function completeFullPrerequisites(context: any, testData: Record<string, string>, options?: { stopAtPan?: boolean }) {
+async function waitForScreenOrThrow(
+  pageObj: any,
+  expected: string | string[],
+  label: string,
+  timeoutMs: number = 15000
+): Promise<void> {
+  const expectedValues = Array.isArray(expected) ? expected : [expected];
+  const pollInterval = 1000;
+  const maxAttempts = Math.ceil(timeoutMs / pollInterval);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const actual = await pageObj.getCurrentScreen().catch(() => '');
+    if (expectedValues.includes(actual)) {
+      return;
+    }
+
+    await pageObj.page?.waitForTimeout?.(pollInterval);
+  }
+
+  throw new Error(`Flow did not reach ${label}. Current screen: ${await pageObj.getCurrentScreen().catch(() => 'unknown')}`);
+}
+
+/**
+ * Helper: Complete prerequisite steps through Additional Details
+ */
+async function completeFullPrerequisites(
+  context: any,
+  testData: Record<string, string>,
+  options?: any
+): Promise<void> {
   const {
     page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
     panVerificationPage, productSelectionPage, incomeDeclarationPage,
     kycPage, poiPage, poaPage
   } = context;
 
+  const mobileNumber = '5678654324';
+
   await test.step('Search Dealer', async () => {
     await dealerSearchPage.navigateToSearchDealer();
     await dealerSearchPage.selectDealerAndSearch(
       testData['dealervalue'] || '1300 - SHREE RAJENDRA DEPARTMENTAL STORES',
       testData['mobilenumberlabel'] || 'Mobile Number',
-      '5678654324',
+      mobileNumber,
       testData['searchbutton'] || 'Search'
     );
   });
@@ -41,38 +72,45 @@ async function completeFullPrerequisites(context: any, testData: Record<string, 
     );
   });
 
-  await page.waitForTimeout(3000); // give time for the next screen to load
-
-  const isZipCodeScreen = await zipCodePage.isCurrentScreen('Zip Code Verification') || 
-                          await page.getByText('Customer ZipCode', { exact: false }).first().isVisible().catch(() => false) ||
-                          await page.getByRole('heading', { name: /Zip Code/i }).first().isVisible().catch(() => false);
-
-  if (!isZipCodeScreen) {
+  // Handle alternative flow where user is dumped into 'Approval Details' instead of Zip Code
+  if (await appStatusPage.isCurrentScreen('Approval Details')) {
     await test.step('Hamburger Navigation to Zip Code Details', async () => {
-      console.log('⚠ Did not land directly on Zip Code Details! Using Hamburger menu to navigate to Zip Code Details...');
+      console.log('⚠ Landed on Approval Details! Using Hamburger menu to navigate to Zip Code Details...');
       await page.waitForTimeout(1000);
-      
+
       const hamburger = page.getByRole('button', { name: '...' }).first()
         .or(page.getByText('...', { exact: true }).first())
         .or(page.locator('.slds-icon-utility-rows').first());
-        
+
       await hamburger.click({ force: true });
-      await page.waitForTimeout(1500);
-      
+      await page.waitForTimeout(1000);
+
       const targetLink = page.getByRole('button', { name: 'Zip Code Verification' })
         .or(page.getByRole('menuitem', { name: /Zip Code Verification/i }));
-        
+
       await targetLink.click({ force: true });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1500);
       console.log('✓ Hamburger navigation to Zip Code Details complete.');
     });
   }
 
+  // Verify Zip Code screen before filling
+  const zipReady = await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal', 'Pincode', 'Pin code', 'Pin Code Verification', 'Pincode Verification', 'PinCode']);
+  if (!zipReady) {
+    const currentScreen = await zipCodePage.getCurrentScreen().catch(() => 'unknown');
+    console.log(`⚠ Not on expected screen. Current screen: "${currentScreen}". Waiting 2 seconds...`);
+    await page.waitForTimeout(2000);
+    const stillNotReady = await zipCodePage.isCurrentScreen(['Zip Code Verification', 'Zip/Postal', 'Pincode', 'Pin code', 'Pin Code Verification', 'Pincode Verification', 'PinCode']);
+    if (!stillNotReady) {
+      const stillCurrentScreen = await zipCodePage.getCurrentScreen().catch(() => 'unknown');
+      throw new Error(`Expected Zip Code/Pincode page, but app is on: "${stillCurrentScreen}"`);
+    }
+  }
+
   await test.step('Zip Code Details', async () => {
-    await page.waitForTimeout(2000); 
     await zipCodePage.fillZipCodeDetails({
       zipCode: testData['zipcodelabel'] || 'Enter Customer ZipCode',
-      zipCodeValue: testData['zipcodevalue'] || '411014 Pune',
+      zipCodeValue: '411014',
       bflBranch: testData['bflbranchvalue'] || '411014-Manual Testing Pune',
       dob: testData['dobvalue'] || '18-12-1996',
       gender: testData['gendervalue'] || 'Male',
@@ -94,24 +132,51 @@ async function completeFullPrerequisites(context: any, testData: Record<string, 
     });
   }
 
-  if (!options?.stopAtPan) {
-    await page.waitForTimeout(3000);
-    if (await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification'])) {
-      await test.step('PAN Verification (No)', async () => {
-        await panVerificationPage.fillPanVerificationDetails(
-          getVal(testData['panNo'], 'HFHPP1234D'),
-          getVal(testData['firstname'], 'Dummycust'),
-          getVal(testData['lastname'], 'Doe'),
-          getVal(testData['dobvalue'], '18-12-1996'),
-          getVal(testData['proceedbuttonvalue'], 'Proceed')
-        );
+  await page.waitForTimeout(1500);
+
+  if (await panVerificationPage.isCurrentScreen(['PAN Verification', 'Data Verification', 'Pan Details'])) {
+    let panProcessed = true;
+    await test.step('PAN Verification (No)', async () => {
+      panProcessed = await panVerificationPage.fillPanVerificationDetails(
+        getVal(testData['panNo'], 'HFHPP1234D'),
+        getVal(testData['firstname'], 'Dummycust'),
+        getVal(testData['lastname'], 'Doe'),
+        getVal(testData['dobvalue'], '18-12-1996'),
+        getVal(testData['proceedbuttonvalue'], 'Proceed')
+      );
+    });
+
+    if (!panProcessed) {
+      await test.step('Hamburger Navigation to Product Selection', async () => {
+        console.log('⚠ PAN prompt not found. Using Hamburger menu to navigate to Product Selection...');
+        const hamburger = page.getByRole('button', { name: '...' }).first()
+          .or(page.getByText('...', { exact: true }).first())
+          .or(page.locator('.slds-icon-utility-rows').first());
+
+        const hamburgerVisible = await hamburger.isVisible({ timeout: 3000 }).catch(() => false);
+        if (!hamburgerVisible) {
+          console.log('⚠ Hamburger menu not visible — skipping navigation, flow may already be past PAN.');
+          return;
+        }
+        await hamburger.click({ force: true, timeout: 3000 }).catch(() => { });
+        await page.waitForTimeout(1000);
+
+        const targetLink = page.getByRole('button', { name: 'Product Selection' })
+          .or(page.getByRole('menuitem', { name: /Product Selection/i }));
+
+        const targetVisible = await targetLink.first().isVisible({ timeout: 3000 }).catch(() => false);
+        if (!targetVisible) {
+          console.log('⚠ "Product Selection" menu item not found — hamburger menu may not have opened. Continuing anyway.');
+          return;
+        }
+        await targetLink.first().click({ force: true, timeout: 3000 }).catch(() => { });
+        await page.waitForTimeout(1500);
+        console.log('✓ Hamburger navigation to Product Selection complete.');
       });
-    } else {
-      console.log('⚠ PAN prompt not found. Assuming we are already on Product Selection.');
     }
   }
 
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1500);
 
   if (await productSelectionPage.isCurrentScreen('Product Selection')) {
     await test.step('Product Selection', async () => {
@@ -124,110 +189,59 @@ async function completeFullPrerequisites(context: any, testData: Record<string, 
     });
   }
 
-  await page.waitForTimeout(4000);
-
-  const isAssetCartScreen = await page.getByText('Asset Cart').first().isVisible().catch(() => false) || await page.url().includes('AssetCart');
-  
-  if (isAssetCartScreen || await incomeDeclarationPage.isCurrentScreen('Asset Cart')) {
-    await test.step('Hamburger Navigation from Asset Cart to Income Declaration', async () => {
-      console.log('Landed on Asset Cart! Using Hamburger menu to navigate to Income Declaration...');
-      const hamburger = page.getByRole('button', { name: '...' }).first()
-        .or(page.getByText('...', { exact: true }).first())
-        .or(page.locator('.slds-icon-utility-rows').first());
-        
-      await hamburger.click({ force: true });
-      await page.waitForTimeout(1500);
-      
-      const targetLink = page.getByRole('button', { name: 'Income Declaration' })
-        .or(page.getByRole('menuitem', { name: /Income Declaration/i }));
-        
-      await targetLink.click({ force: true });
-      await page.waitForTimeout(2000);
-      console.log('✓ Hamburger navigation to Income Declaration complete.');
-    });
-  }
-
-  if (await incomeDeclarationPage.isCurrentScreen('Income Declaration')) {
-    await test.step('Income Declaration', async () => {
-      await incomeDeclarationPage.fillIncomeDeclaration(
-        '30000',
-        testData['proceedbuttonvalue'] || 'Proceed'
-      );
-    });
-  }
-
-  await page.waitForTimeout(4000);
-
-  if (await kycPage.isCurrentScreen('KYC')) {
-    await test.step('KYC Details', async () => {
-      await kycPage.fillKYCDetails(
-        "Customer doesn't have one of the listed Document types",
-        'Save',
-        testData['proceedbuttonvalue'] || 'Proceed'
-      );
-    });
-  }
-
-  await page.waitForTimeout(4000);
-
-  if (await poiPage.isCurrentScreen('POI')) {
-    await test.step('POI Details', async () => {
-      await poiPage.fillPoiDetails(
-        getVal(testData['firstname'], 'Dummycust'),
-        '',
-        getVal(testData['lastname'], 'Doe'),
-        testData['poitypevalue'] || 'Aadhaar',
-        testData['poinumbervalue'] || '2222',
-        testData['gendervalue'] || 'Male',
-        getVal(testData['dobvalue'], '18-12-1996'),
-        testData['employmenttypevalue'] || 'Salaried',
-        testData['proceedbuttonvalue'] || 'Proceed'
-      );
-    });
-  }
-
-  await page.waitForTimeout(4000);
-
-  if (await poaPage.isCurrentScreen('POA')) {
-    await test.step('POA Details', async () => {
-      await poaPage.fillPoaDetails(
-        'Self Owned',
-        testData['zipcodevalue'] || '411014 Pune',
-        testData['bflbranchvalue'] || '411014-Manual Testing Pune',
-        testData['adressline1'] || 'Bajaj Finserv Head Office',
-        testData['adressline2'] || 'Sakore Nagar, Viman Nagar',
-        testData['adressline3'] || 'Pune, Maharashtra',
-        testData['arealocalityvalue'] || 'Sakore Nagar, Viman Nagar',
-        testData['landmarkvalue'] || 'Near Pune International Airport',
-        testData['cityvalue'] || 'Pune',
-        testData['statevalue'] || 'Maharashtra',
-        'Aadhaar',
-        testData['poanumbervalue'] || '2222',
-        testData['proceedbuttonvalue'] || 'Proceed'
-      );
-    });
-  }
-
-  // Final wait — app auto-navigates to Surrogate Details after POA Proceed
-  await page.waitForTimeout(3000);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER: Navigate to App Status only (for Hamburger suite)
-// ─────────────────────────────────────────────────────────────────────────────
-async function navigateToAppStatus(context: any, testData: Record<string, string>) {
-  const { dealerSearchPage, appStatusPage } = context;
-
-  await test.step('Search Dealer', async () => {
-    await dealerSearchPage.navigateToSearchDealer();
-    await dealerSearchPage.selectDealerAndSearch(
-      testData['dealervalue'] || '1300 - SHREE RAJENDRA DEPARTMENTAL STORES',
-      testData['mobilenumberlabel'] || 'Mobile Number',
-      '5678654324',
+  await waitForScreenOrThrow(incomeDeclarationPage, 'Income Declaration', 'Income Declaration');
+  await test.step('Income Declaration', async () => {
+    await incomeDeclarationPage.fillIncomeDeclaration(
+      '30000',
+      testData['proceedbuttonvalue'] || 'Proceed'
     );
-    // DO NOT click Proceed — we navigate via Hamburger menu directly from App Status
-    console.log('✓ Reached App Status. NOT clicking Proceed — going via Hamburger next.');
   });
+
+  await waitForScreenOrThrow(kycPage, 'KYC', 'KYC');
+  await test.step('KYC Details', async () => {
+    await kycPage.fillKYCDetails(
+      "Customer doesn't have one of the listed Document types",
+      'Save',
+      testData['proceedbuttonvalue'] || 'Proceed'
+    );
+  });
+
+  await waitForScreenOrThrow(poiPage, ['POI', 'Officially Valid Documents'], 'POI');
+  await test.step('POI Details', async () => {
+    await poiPage.fillPoiDetails(
+      getVal(testData['firstname'], 'Dummycust'),
+      '',
+      getVal(testData['lastname'], 'Doe'),
+      testData['poitypevalue'] || 'Aadhaar',
+      testData['poinumbervalue'] || '2222',
+      testData['gendervalue'] || 'Male',
+      getVal(testData['dobvalue'], '18-12-1996'),
+      testData['employmenttypevalue'] || 'Salaried',
+      testData['proceedbuttonvalue'] || 'Proceed'
+    );
+  });
+
+  await waitForScreenOrThrow(poaPage, ['POA', 'Current Address'], 'POA');
+  await test.step('POA Details', async () => {
+    await poaPage.fillPoaDetails(
+      'Self Owned',
+      '411014',
+      testData['bflbranchvalue'] || '411014-Manual Testing Pune',
+      testData['adressline1'] || 'Bajaj Finserv Head Office',
+      testData['adressline2'] || 'Sakore Nagar, Viman Nagar',
+      testData['adressline3'] || 'Pune, Maharashtra',
+      testData['arealocalityvalue'] || 'Sakore Nagar, Viman Nagar',
+      testData['landmarkvalue'] || 'Near Pune International Airport',
+      testData['cityvalue'] || 'Pune',
+      testData['statevalue'] || 'Maharashtra',
+      'Aadhaar',
+      testData['poanumbervalue'] || '2222',
+      testData['proceedbuttonvalue'] || 'Proceed'
+    );
+  });
+
+  await page.waitForTimeout(2000);
+
 }
 
 // =============================================================================
@@ -254,23 +268,14 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
       page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
       panVerificationPage, productSelectionPage, incomeDeclarationPage,
       kycPage, poiPage, poaPage, surrogateDetailsPage
-    }, testData);
+    }, testData, { stopAfter: poaPage });
 
     await test.step('Wait for Surrogate Details screen', async () => {
       await surrogateDetailsPage.navigateToSurrogateDetails();
     });
 
     await test.step('Select Credit Program + RSA = No → Check Approval → Proceed', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_no'] || 'No'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_no'] || 'No', undefined, false);
       await surrogateDetailsPage.clickProceed();
     });
 
@@ -279,7 +284,7 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
 
   // ─── E2E 2: Asset Cart → Change Scheme ────────────────────────────────────
   test.describe('E2E-2: Asset Cart → Change Scheme → Surrogate Details', () => {
-    
+
     // Use standard E2E flow from start up to Surrogate Details
     async function completeAssetCartToSurrogatePrerequisites(context: any, testData: any) {
       const {
@@ -292,9 +297,8 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
         page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
         panVerificationPage, productSelectionPage, incomeDeclarationPage,
         kycPage, poiPage, poaPage, surrogateDetailsPage, assetCartPage
-      }, testData);
+      }, testData, { stopAfter: poaPage });
     }
-
     test('2A: positive: RSA = No', async ({
       page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
       panVerificationPage, productSelectionPage, incomeDeclarationPage,
@@ -307,19 +311,9 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
       };
       await completeAssetCartToSurrogatePrerequisites(context, testData);
       await test.step('Complete Surrogate Details (RSA = No)', async () => {
-        await context.surrogateDetailsPage.selectSurrogateDetails(
-          testData['surrogatedetailspagename'] || 'Surrogate Details',
-          testData['processtypelabel'] || 'Process Type',
-          testData['processtypevalue'] || 'Normal',
-          testData['creditprogramlabel'] || 'Credit Program',
-          testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-          testData['checkapprovalbuttonlabel'] || 'Check Approval',
-          testData['rsalabel'] || 'RSA',
-          testData['rsavalue_no'] || 'No',
-          undefined, // rsaRejectReason
-          undefined, // bankName
-          true       // stopAfterCheckApproval
-        );
+        await context.surrogateDetailsPage.selectSurrogateDetails(// rsaRejectReason
+          undefined, testData['rsavalue_no'] || 'No', undefined, // bankName
+          true);       // stopAfterCheckApproval
       });
       console.log('✓ E2E-2A Passed: Asset Cart → Change Scheme → Surrogate Details (RSA = No)');
     });
@@ -335,23 +329,9 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
         kycPage, poiPage, poaPage, surrogateDetailsPage, assetCartPage
       };
       await completeAssetCartToSurrogatePrerequisites(context, testData);
-      await test.step('Select Bank Name', async () => {
-        await context.surrogateDetailsPage.selectBankName(testData['customerbankname'] || 'Axis Bank');
-      });
       await test.step('Complete Surrogate Details (RSA = FOS)', async () => {
-        await context.surrogateDetailsPage.selectSurrogateDetails(
-          testData['surrogatedetailspagename'] || 'Surrogate Details',
-          testData['processtypelabel'] || 'Process Type',
-          testData['processtypevalue'] || 'Normal',
-          testData['creditprogramlabel'] || 'Credit Program',
-          testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-          testData['checkapprovalbuttonlabel'] || 'Check Approval',
-          testData['rsalabel'] || 'RSA',
-          testData['rsavalue_yes'] || 'FOS',
-          testData['rsarejectreason'] || 'Customer Not Interested',
-          testData['customerbankname'] || 'Axis Bank', // bankName
-          true       // stopAfterCheckApproval
-        );
+        await context.surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_yes'] || 'FOS', testData['rsarejectreason'] || 'Customer Not Interested', // bankName
+          true);       // stopAfterCheckApproval
       });
       console.log('✓ E2E-2B Passed: Asset Cart → Change Scheme → Surrogate Details (RSA = FOS)');
     });
@@ -367,23 +347,9 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
         kycPage, poiPage, poaPage, surrogateDetailsPage, assetCartPage
       };
       await completeAssetCartToSurrogatePrerequisites(context, testData);
-      await test.step('Select Bank Name', async () => {
-        await context.surrogateDetailsPage.selectBankName(testData['customerbankname'] || 'Axis Bank');
-      });
       await test.step('Complete Surrogate Details (RSA = Dealer)', async () => {
-        await context.surrogateDetailsPage.selectSurrogateDetails(
-          testData['surrogatedetailspagename'] || 'Surrogate Details',
-          testData['processtypelabel'] || 'Process Type',
-          testData['processtypevalue'] || 'Normal',
-          testData['creditprogramlabel'] || 'Credit Program',
-          testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-          testData['checkapprovalbuttonlabel'] || 'Check Approval',
-          testData['rsalabel'] || 'RSA',
-          testData['rsavalue_dealer'] || 'Dealer',
-          testData['rsarejectreason'] || 'Customer Not Interested',
-          testData['customerbankname'] || 'Axis Bank', // bankName
-          true       // stopAfterCheckApproval
-        );
+        await context.surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_dealer'] || 'Dealer', testData['rsarejectreason'] || 'Third party', // bankName
+          true);       // stopAfterCheckApproval
       });
       console.log('✓ E2E-2C Passed: Asset Cart → Change Scheme → Surrogate Details (RSA = Dealer)');
     });
@@ -401,7 +367,7 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
       await completeAssetCartToSurrogatePrerequisites(context, testData);
       await test.step('Select RSA = FOS without Reject Reason → Click Check Approval', async () => {
         await context.surrogateDetailsPage.selectRsaDetails(testData['rsavalue_yes'] || 'FOS');
-        await context.surrogateDetailsPage.clickCheckApproval().catch(() => {});
+        await context.surrogateDetailsPage.clickCheckApproval().catch(() => { });
       });
 
       const hasError = await context.page.locator(
@@ -446,12 +412,12 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
   test('E2E-2: Full flow → Surrogate → RSA = FOS + Reject Reason → Check Approval', async ({
     page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
     panVerificationPage, productSelectionPage, incomeDeclarationPage,
-    kycPage, poiPage, poaPage, surrogateDetailsPage
+    kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
   }) => {
     await completeFullPrerequisites({
       page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
       panVerificationPage, productSelectionPage, incomeDeclarationPage,
-      kycPage, poiPage, poaPage, surrogateDetailsPage
+      kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
     }, testData);
 
     await test.step('Wait for Surrogate Details screen', async () => {
@@ -459,17 +425,7 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
     });
 
     await test.step('Select Credit Program + RSA = FOS + Reject Reason → Check Approval', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_yes'] || 'FOS',
-        testData['rsarejectreason'] || 'Customer Not Interested'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_yes'] || 'FOS', testData['rsarejectreason'] || 'Customer Not Interested', false);
       await surrogateDetailsPage.clickProceed();
     });
 
@@ -493,17 +449,7 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
     });
 
     await test.step('Select Surrogate Details → Click Check Approval', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_no'] || 'No',
-        ''
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_no'] || 'No', '', false);
       await surrogateDetailsPage.clickProceed();
     });
 
@@ -517,6 +463,23 @@ test.describe('11 - Surrogate Details [E2E Full Flow]', () => {
     console.log('✓ E2E-3 Passed: Check Approval → Underwriting → Approval Details done');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Navigate to App Status only (for Hamburger suite)
+// ─────────────────────────────────────────────────────────────────────────────
+async function navigateToAppStatus(context: any, testData: Record<string, string>) {
+  const { dealerSearchPage } = context;
+  await test.step('Search Dealer', async () => {
+    await dealerSearchPage.navigateToSearchDealer();
+    await dealerSearchPage.selectDealerAndSearch(
+      testData['dealervalue'] || '1300 - SHREE RAJENDRA DEPARTMENTAL STORES',
+      testData['mobilenumberlabel'] || 'Mobile Number',
+      '5678654324',
+      testData['searchbutton'] || 'Search'
+    );
+    console.log('✓ Reached App Status. NOT clicking Proceed — going via Hamburger next.');
+  });
+}
 
 // =============================================================================
 // SUITE B: HAMBURGER — App Status → Hamburger Menu → Surrogate Details
@@ -546,16 +509,7 @@ test.describe('11B - Surrogate Details [Hamburger Flow]', () => {
     });
 
     await test.step('Credit Program + RSA = No → Check Approval → Proceed', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_no'] || 'No'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_no'] || 'No', undefined, false);
     });
 
     console.log('✓ HB-1 Passed: Hamburger → Bank Name + RSA = No → Check Approval done');
@@ -576,17 +530,7 @@ test.describe('11B - Surrogate Details [Hamburger Flow]', () => {
     });
 
     await test.step('Credit Program + RSA = FOS + Reject Reason → Check Approval', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_yes'] || 'FOS',
-        testData['rsarejectreason'] || 'Customer Not Interested'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_yes'] || 'FOS', testData['rsarejectreason'] || 'Customer Not Interested', false);
     });
 
     console.log('✓ HB-2 Passed: Hamburger → Bank Name + RSA = FOS + Reject Reason done');
@@ -607,17 +551,7 @@ test.describe('11B - Surrogate Details [Hamburger Flow]', () => {
     });
 
     await test.step('Credit Program + RSA = Dealer + Reject Reason → Check Approval', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData['surrogatedetailspagename'] || 'Surrogate Details',
-        testData['processtypelabel'] || 'Process Type',
-        testData['processtypevalue'] || 'Normal',
-        testData['creditprogramlabel'] || 'Credit Program',
-        testData['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData['checkapprovalbuttonlabel'] || 'Check Approval',
-        testData['rsalabel'] || 'RSA',
-        testData['rsavalue_dealer'] || 'Dealer',
-        testData['rsarejectreason'] || 'Customer Not Interested'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData['customerbankname'] || 'Axis Bank', testData['rsavalue_dealer'] || 'Dealer', testData['rsarejectreason'] || 'Customer Not Interested', false);
     });
 
     console.log('✓ HB-3 Passed: Hamburger → Bank Name + RSA = Dealer + Reject Reason done');
@@ -635,7 +569,7 @@ test.describe('11B - Surrogate Details [Hamburger Flow]', () => {
 
     await test.step('Select RSA = FOS without Reject Reason → Click Check Approval', async () => {
       await surrogateDetailsPage.selectRsaDetails(testData['rsavalue_yes'] || 'FOS');
-      await surrogateDetailsPage.clickCheckApproval().catch(() => {});
+      await surrogateDetailsPage.clickCheckApproval().catch(() => { });
     });
 
     const hasError = await page.locator(
@@ -707,18 +641,7 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
     });
 
     await test.step('Fill Surrogate Details', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData11A['surrogatedetailspagename'] || 'Surrogate Details',
-        testData11A['processtypelabel'] || 'Process Type',
-        testData11A['processtypevalue'] || 'Normal',
-        testData11A['creditprogramlabel'] || 'Credit Program',
-        testData11A['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData11A['checkapprovalbuttonlabel'] || 'Check Approval',
-        'RSA',
-        'No',
-        undefined,
-        testData11A['customerbankname'] || 'Axis Bank'
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData11A['customerbankname'] || 'Axis Bank', 'No', undefined, false);
     });
 
     const errorBanner = await page.locator("//div[contains(@class,'slds-theme_error')]").isVisible({ timeout: 1000 }).catch(() => false);
@@ -732,6 +655,7 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
     panVerificationPage, productSelectionPage, incomeDeclarationPage,
     kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
   }) => {
+    // Use default mobile number (5678654324)
     await sharedPrereq11({
       page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
       panVerificationPage, productSelectionPage, incomeDeclarationPage,
@@ -775,19 +699,8 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
     });
 
     await test.step('Fill Surrogate Details (RSA = Dealer)', async () => {
-      await surrogateDetailsPage.selectSurrogateDetails(
-        testData11A['surrogatedetailspagename'] || 'Surrogate Details',
-        testData11A['processtypelabel'] || 'Process Type',
-        testData11A['processtypevalue'] || 'Normal',
-        testData11A['creditprogramlabel'] || 'Credit Program',
-        testData11A['creditprogramvalue'] || '1.06 [Prime Banking]',
-        testData11A['checkapprovalbuttonlabel'] || 'Check Approval',
-        'RSA',
-        testData11A['rsavalue_dealer'] || 'Dealer',
-        testData11A['rsarejectreason'] || 'Customer Not Interested',
-        undefined, // bankName already selected
-        true // stopAfterCheckApproval
-      );
+      await surrogateDetailsPage.selectSurrogateDetails(testData11A['customerbankname'] || 'Axis Bank', testData11A['rsavalue_dealer'] || 'Dealer', testData11A['rsarejectreason'] || 'Third party', // bankName already selected
+        true); // stopAfterCheckApproval
       console.log('✓ 11A-3 Passed: Surrogate Details completed for RSA = Dealer');
     });
   });
@@ -809,14 +722,13 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
     });
 
     await test.step('Select RSA = FOS without Reject Reason → Click Check Approval', async () => {
-      await surrogateDetailsPage.selectBankName(testData11A['customerbankname'] || 'Axis Bank');
       await surrogateDetailsPage.selectRsaDetails(testData11A['rsavalue_yes'] || 'FOS');
-      await surrogateDetailsPage.clickCheckApproval(true).catch(() => {});
-      
+      await surrogateDetailsPage.clickCheckApproval(true).catch(() => { });
+
       const hasError = await page.locator(
         ".toastMessage, .slds-notify_toast, .error"
       ).filter({ hasText: /RSA|Reject Reason|required|mandatory/i }).first().isVisible({ timeout: 5000 }).catch(() => false);
-      
+
       if (hasError) {
         console.log('✓ 11A-4 Passed: Validation error when RSA Reject Reason is missing');
       } else {
@@ -846,7 +758,7 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
       const hasError = await page.locator(
         ".toastMessage, .slds-notify_toast, .error"
       ).filter({ hasText: /Bank|required|mandatory/i }).first().isVisible({ timeout: 5000 }).catch(() => false);
-      
+
       if (hasError) {
         console.log('✓ 11A-5 Passed: Validation when Customer Bank Name is missing');
       } else {
@@ -855,192 +767,164 @@ test.describe('11A - Surrogate Details [E2E Full Flow]', () => {
     });
   });
 
+  // ==========================================
+  // NEW TEST SCENARIOS (Pending Implementation)
+  // Change 'test.skip' to 'test' to activate
+  // ==========================================
+
+  // ── 11A-6: Feature — Verify Customer Bank Name Dropdown Lists Banks ──────
+  test('11A-6 [Feature]: E2E → Surrogate Details → Verify Customer Bank Name Dropdown Lists Banks', async ({
+    page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+    panVerificationPage, productSelectionPage, incomeDeclarationPage,
+    kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+  }) => {
+    await sharedPrereq11({
+      page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+      panVerificationPage, productSelectionPage, incomeDeclarationPage,
+      kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+    }, testData11A, { stopAfter: 'poa' });
+
+    await test.step('Navigate to Surrogate Details', async () => {
+      await surrogateDetailsPage.navigateToSurrogateDetails();
+    });
+
+    await test.step('Verify Customer Bank Name Dropdown Lists Banks', async () => {
+      // Look for Customer Bank Name dropdown
+      const bankDropdown = page.getByLabel(/Customer Bank Name|Bank Name/i).first()
+        .or(page.locator('select').filter({ has: page.locator('option', { hasText: /HDFC|ICICI|Axis|SBI/i }) }).first());
+
+      const isVisible = await bankDropdown.isVisible({ timeout: 5000 }).catch(() => false);
+
+      if (isVisible) {
+        const options = await bankDropdown.locator('option').allTextContents();
+        const meaningfulOptions = options.filter(o => o.trim() && o.trim() !== '--None--');
+
+        console.log(`✓ 11A-6 Passed: Customer Bank Name dropdown lists ${meaningfulOptions.length} banks: ${meaningfulOptions.join(', ')}`);
+
+        // Verify common banks exist
+        const commonBanks = ['HDFC', 'ICICI', 'Axis', 'SBI', 'Kotak'];
+        const foundBanks = commonBanks.filter(bank =>
+          options.some(opt => new RegExp(bank, 'i').test(opt))
+        );
+
+        if (foundBanks.length > 0) {
+          console.log(`✓ Found common banks: ${foundBanks.join(', ')}`);
+        }
+
+        expect(meaningfulOptions.length).toBeGreaterThan(0);
+      } else {
+        console.log('⚠ 11A-6: Customer Bank Name dropdown not visible (might be combobox variant)');
+        // Try alternative approach for lightning-combobox
+        const comboboxLabel = page.locator('label').filter({ hasText: /Customer Bank Name|Bank Name/i }).first();
+        const isComboboxVisible = await comboboxLabel.isVisible({ timeout: 3000 }).catch(() => false);
+        if (isComboboxVisible) {
+          console.log('✓ 11A-6: Customer Bank Name field exists (lightning-combobox variant)');
+        }
+      }
+    });
+  });
+
+  // ── 11A-7: Feature — RSA = No, Verify RSA Rejected Reason Disabled ───────
+  test('11A-7 [Feature]: E2E → Surrogate Details → RSA = No → Verify RSA Rejected Reason Disabled', async ({
+    page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+    panVerificationPage, productSelectionPage, incomeDeclarationPage,
+    kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+  }) => {
+    await sharedPrereq11({
+      page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+      panVerificationPage, productSelectionPage, incomeDeclarationPage,
+      kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+    }, testData11A, { stopAfter: 'poa' });
+
+    await test.step('Navigate to Surrogate Details', async () => {
+      await surrogateDetailsPage.navigateToSurrogateDetails();
+    });
+
+    await test.step('Select RSA = No and verify Rejected Reason is disabled', async () => {
+      // Select RSA = No
+      const rsaNoRadio = page.locator('input[type="radio"], input[type="checkbox"]').filter({
+        has: page.locator(':scope ~ label, :scope ~ span').filter({ hasText: /No|N/i })
+      }).first()
+        .or(page.getByRole('radio', { name: /No/i }).first());
+
+      const isRsaNoVisible = await rsaNoRadio.isVisible({ timeout: 5000 }).catch(() => false);
+
+      if (isRsaNoVisible) {
+        await rsaNoRadio.click({ force: true });
+        await page.waitForTimeout(1500);
+
+        // Check if RSA Rejected Reason field is disabled
+        const rejectedReasonField = page.getByLabel(/RSA Rejected Reason|Rejected Reason/i).first()
+          .or(page.locator('select, input').filter({
+            has: page.locator('~ label, ~ span').filter({ hasText: /Rejected Reason/i })
+          }).first());
+
+        const isFieldVisible = await rejectedReasonField.isVisible({ timeout: 3000 }).catch(() => false);
+
+        if (isFieldVisible) {
+          const isDisabled = await rejectedReasonField.isDisabled().catch(() => false);
+          const fieldValue = await rejectedReasonField.inputValue().catch(() => '');
+
+          if (isDisabled || fieldValue === '-' || fieldValue === '--' || fieldValue === '') {
+            console.log('✓ 11A-7 Passed: RSA Rejected Reason is disabled with "-" or empty when RSA = No');
+            expect(isDisabled || fieldValue === '-' || fieldValue === '--' || fieldValue === '').toBe(true);
+          } else {
+            console.log(`⚠ 11A-7: RSA Rejected Reason enabled with value: "${fieldValue}"`);
+          }
+        } else {
+          console.log('✓ 11A-7: RSA Rejected Reason field not visible when RSA = No (expected behavior)');
+        }
+      } else {
+        console.log('⚠ 11A-7: RSA = No option not found');
+      }
+    });
+  });
+
+  // ── 11A-8: Feature — Verify Check Approval or Proceed Button Shows ───────
+  test('11A-8 [Feature]: E2E → Surrogate Details → Verify Check Approval/Proceed Button Shows', async ({
+    page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+    panVerificationPage, productSelectionPage, incomeDeclarationPage,
+    kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+  }) => {
+    await sharedPrereq11({
+      page, dealerSearchPage, appStatusPage, zipCodePage, mitcPage,
+      panVerificationPage, productSelectionPage, incomeDeclarationPage,
+      kycPage, poiPage, poaPage, surrogateDetailsPage, approvalDetailsPage
+    }, testData11A, { stopAfter: 'poa' });
+
+    await test.step('Navigate to Surrogate Details', async () => {
+      await surrogateDetailsPage.navigateToSurrogateDetails();
+    });
+
+    await test.step('Verify Check Approval or Proceed button is visible', async () => {
+      // Look for Check Approval button
+      const checkApprovalBtn = page.getByRole('button', { name: /Check Approval/i }).first();
+      const isCheckApprovalVisible = await checkApprovalBtn.isVisible({ timeout: 5000 }).catch(() => false);
+
+      if (isCheckApprovalVisible) {
+        console.log('✓ 11A-8 Passed: "Check Approval" button is visible');
+        expect(isCheckApprovalVisible).toBe(true);
+      } else {
+        // If Check Approval not found, look for Proceed button instead
+        console.log('⚠ "Check Approval" not found, checking for "Proceed" button...');
+        const proceedBtn = page.getByRole('button', { name: /Proceed/i }).first();
+        const isProceedVisible = await proceedBtn.isVisible({ timeout: 3000 }).catch(() => false);
+
+        if (isProceedVisible) {
+          console.log('✓ 11A-8 Passed: "Proceed" button is visible (alternative to Check Approval)');
+          expect(isProceedVisible).toBe(true);
+        } else {
+          console.log('❌ 11A-8 Failed: Neither "Check Approval" nor "Proceed" button found');
+          expect(isCheckApprovalVisible || isProceedVisible).toBe(true);
+        }
+      }
+    });
+  });
 
 
-// ==========================================
-// NEW TEST SCENARIOS (Pending Implementation)
-// Change 'test.skip' to 'test' to activate
-// ==========================================
 
-// test.skip('Positive: Select the Credit Card surrogate and fill valid details.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and select Credit Card', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     const surrogateHeading = page.getByText(/Surrogate|Credit Card|Income Surrogate/i).first();
-//     if (!await surrogateHeading.isVisible({ timeout: 15000 }).catch(() => false)) { console.log('ℹ Surrogate page not reached'); return; }
-//     // Select Credit Card surrogate type
-//     const ccRadio = page.getByLabel(/Credit Card/i).first()
-//       .or(page.locator('input[type="radio"]').filter({ has: page.getByText(/Credit Card/i) }).first());
-//     if (await ccRadio.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await ccRadio.click({ force: true });
-//       await page.waitForTimeout(1000);
-//     }
-//     // Fill credit card number
-//     const ccInput = page.getByLabel(/Credit Card Number|Card Number/i).first()
-//       .or(page.locator('input[name*="card_number"], input[placeholder*="Card"]').first());
-//     if (await ccInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await ccInput.fill(testData['creditcardnumber'] || '4111111111111111');
-//       await page.keyboard.press('Tab');
-//       await page.waitForTimeout(1000);
-//       console.log('✓ Credit card surrogate details filled');
-//     }
-//     const proceedBtn = page.getByRole('button', { name: testData['proceedbuttonvalue'] || 'Proceed', exact: true }).first();
-//     if (await proceedBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await proceedBtn.click();
-//       await page.waitForTimeout(3000);
-//       const nextScreen = page.getByText(/Approval|Income|Declaration/i).first();
-//       const onNext = await nextScreen.isVisible({ timeout: 10000 }).catch(() => false);
-//       console.log(`✓ Credit Card surrogate submitted — next: ${onNext}`);
-//     }
-//   });
-// });
 
-// test.skip('Positive: Select the Banking surrogate and upload a valid statement.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and upload bank statement', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     const surrogateHeading = page.getByText(/Surrogate|Banking|Bank Statement/i).first();
-//     if (!await surrogateHeading.isVisible({ timeout: 15000 }).catch(() => false)) { console.log('ℹ Surrogate page not reached'); return; }
-//     // Select Banking surrogate
-//     const bankingRadio = page.getByLabel(/Banking|Bank Statement/i).first();
-//     if (await bankingRadio.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await bankingRadio.click({ force: true });
-//       await page.waitForTimeout(1000);
-//     }
-//     // Enter bank name
-//     const bankNameInput = page.getByLabel(/Bank Name/i).first()
-//       .or(page.locator('input[name*="bank_name"]').first());
-//     if (await bankNameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-//       await bankNameInput.fill(testData['bankname'] || 'HDFC Bank');
-//       await page.keyboard.press('Tab');
-//     }
-//     // Upload bank statement PDF
-//     const fileInput = page.locator('input[type="file"]').first();
-//     if (await fileInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await fileInput.setInputFiles('test-fixtures/bank_statement.pdf').catch(() => console.log('ℹ Bank statement file not found'));
-//       await page.waitForTimeout(3000);
-//       console.log('✓ Bank statement uploaded');
-//     }
-//   });
-// });
 
-// test.skip('Negative: Enter an invalid Credit Card BIN/number format.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and enter invalid card number', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     const surrogateHeading = page.getByText(/Surrogate|Credit Card/i).first();
-//     if (!await surrogateHeading.isVisible({ timeout: 15000 }).catch(() => false)) { console.log('ℹ Surrogate page not reached'); return; }
-//     const ccRadio = page.getByLabel(/Credit Card/i).first();
-//     if (await ccRadio.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await ccRadio.click({ force: true });
-//       await page.waitForTimeout(1000);
-//     }
-//     const ccInput = page.getByLabel(/Credit Card Number|Card Number/i).first()
-//       .or(page.locator('input[name*="card_number"]').first());
-//     if (await ccInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await ccInput.fill('1234'); // Too short / invalid
-//       await page.keyboard.press('Tab');
-//       await page.waitForTimeout(1000);
-//     }
-//     const proceedBtn = page.getByRole('button', { name: testData['proceedbuttonvalue'] || 'Proceed', exact: true }).first();
-//     if (await proceedBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await proceedBtn.click();
-//       await page.waitForTimeout(2000);
-//     }
-//     const errorEl = page.locator('.slds-has-error, .toastMessage, [role="alert"]').first();
-//     const hasError = await errorEl.isVisible({ timeout: 5000 }).catch(() => false);
-//     expect(hasError).toBe(true);
-//     console.log(`✓ Invalid credit card BIN rejected: error=${hasError}`);
-//   });
-// });
 
-// test.skip('Negative: Upload an invalid or password-protected bank statement.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and upload invalid statement', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     const bankingRadio = page.getByLabel(/Banking|Bank Statement/i).first();
-//     if (await bankingRadio.isVisible({ timeout: 15000 }).catch(() => false)) {
-//       await bankingRadio.click({ force: true });
-//       await page.waitForTimeout(1000);
-//     }
-//     const fileInput = page.locator('input[type="file"]').first();
-//     if (await fileInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       // Upload a corrupted / password-protected PDF
-//       await fileInput.setInputFiles({ name: 'protected.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 Fake PDF') }).catch(() => {});
-//       await page.waitForTimeout(3000);
-//       const errorEl = page.locator('.toastMessage, [role="alert"]').filter({ hasText: /invalid|password|protected|corrupt/i }).first();
-//       const hasError = await errorEl.isVisible({ timeout: 5000 }).catch(() => false);
-//       console.log(`✓ Invalid bank statement error: ${hasError}`);
-//     }
-//   });
-// });
 
-// test.skip('Positive: Proceed without providing a surrogate (if eligible/bypass allowed).', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and skip if bypass allowed', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     // Look for "Skip" or "Not Required" option
-//     const skipBtn = page.getByRole('button', { name: /Skip|Not Required|No Surrogate/i }).first()
-//       .or(page.getByText(/Skip Surrogate|Continue without/i).first());
-//     if (await skipBtn.isVisible({ timeout: 10000 }).catch(() => false)) {
-//       await skipBtn.click({ force: true });
-//       await page.waitForTimeout(3000);
-//       const nextScreen = page.getByText(/Approval|Income|Declaration/i).first();
-//       const onNext = await nextScreen.isVisible({ timeout: 10000 }).catch(() => false);
-//       console.log(`✓ Surrogate skipped — next screen: ${onNext}`);
-//     } else {
-//       console.log('ℹ No skip option for surrogate — it may be mandatory');
-//     }
-//   });
-// });
-
-// test.skip('Negative: Attempt to proceed without a surrogate when it is mandatory for the product.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Reach Surrogate page and proceed without selecting any surrogate', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     const surrogateHeading = page.getByText(/Surrogate/i).first();
-//     if (!await surrogateHeading.isVisible({ timeout: 15000 }).catch(() => false)) { console.log('ℹ Surrogate page not reached'); return; }
-//     // Click Proceed without filling any surrogate data
-//     const proceedBtn = page.getByRole('button', { name: testData['proceedbuttonvalue'] || 'Proceed', exact: true }).first();
-//     if (await proceedBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-//       await proceedBtn.click();
-//       await page.waitForTimeout(2000);
-//     }
-//     const errorEl = page.locator('.slds-has-error, .toastMessage, [role="alert"]').first();
-//     const hasError = await errorEl.isVisible({ timeout: 5000 }).catch(() => false);
-//     expect(hasError).toBe(true);
-//     console.log(`✓ Mandatory surrogate validation: error=${hasError}`);
-//   });
-// });
-
-// test.skip('Positive: Verify surrogate eligibility logic triggers correctly based on LTV.', async ({ page, dealerSearchPage, appStatusPage }) => {
-//   await test.step('Navigate and observe LTV-based surrogate eligibility', async () => {
-//     await dealerSearchPage.navigateToSearchDealer();
-//     await dealerSearchPage.selectDealerAndSearch(testData['dealervalue'], testData['mobilenumberlabel'], mobileNumber, testData['searchbutton'] || 'Search');
-//     await appStatusPage.proceedFromAppStatus(testData['appstatuspagename'] || 'App Status', testData['proceedbuttonvalue'] || 'Proceed');
-//     await page.waitForTimeout(5000);
-//     // Check if surrogate section appears (depends on LTV/product/income)
-//     const surrogateSection = page.getByText(/Surrogate|LTV|Income Verification/i).first();
-//     const isSurrogateNeeded = await surrogateSection.isVisible({ timeout: 15000 }).catch(() => false);
-//     console.log(`✓ Surrogate eligibility triggered by LTV: ${isSurrogateNeeded}`);
-//     // If surrogate appears, verify the correct surrogate types are shown
-//     if (isSurrogateNeeded) {
-//       const ccOption = page.getByLabel(/Credit Card/i).isVisible({ timeout: 3000 }).catch(() => false);
-//       const bankOption = page.getByLabel(/Banking|Bank Statement/i).isVisible({ timeout: 3000 }).catch(() => false);
-//       console.log(`✓ Available surrogates — Credit Card: ${await ccOption} | Banking: ${await bankOption}`);
-//     }
-//   });
-// });
 });

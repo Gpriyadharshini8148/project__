@@ -7,7 +7,7 @@
  * Note: This is the "Data Verification" step in your workflow
  */
 
-import { test, expect } from '../../fixtures';
+import { test, expect, PageObjects } from '../../fixtures';
 import { ExcelReader, DataGenerator } from '../../utils';
 import { config } from '../../config/environment.config';
 import { PanVerificationPage } from '../../pages/customer-onboarding/panVerificationPage';
@@ -41,75 +41,66 @@ test.describe('05 - PAN Verification (Data Verification)', () => {
       panVerificationPage
     } = context;
 
-    // Step 1: Login
-    await dealerSearchPage.navigateToSearchDealer();
+ await test.step('Search Dealer', async () => {
+      await dealerSearchPage.navigateToSearchDealer();
+      await dealerSearchPage.selectDealerAndSearch(
+        testData['dealervalue'] || '1300 - SHREE RAJENDRA DEPARTMENTAL STORES',
+        testData['mobilenumberlabel'] || 'Mobile Number',
+        '5678654324',
+        testData['searchbutton'] || 'Search'
+      );
+    });
 
-    // Step 2: Search dealer
-    await dealerSearchPage.selectDealerAndSearch(
-      testData['dealervalue'],
-      testData['mobilenumberlabel'],
-      mobileNumber,
-      testData['searchbutton'] || "Search",
-    );
+    await test.step('Proceed from App Status', async () => {
+      await appStatusPage.proceedFromAppStatus(
+        testData['appstatuspagename'] || 'App Status',
+        testData['proceedbuttonvalue'] || 'Proceed'
+      );
+    });
 
-    // Step 3: App status
-    await appStatusPage.proceedFromAppStatus(
-      testData['appstatuspagename'] || "App Status",
-      testData['proceedbuttonvalue']  || "Proceed",
-    );
-
-    // Handle alternative flow: navigate via Hamburger menu if not on Zip Code page
-    if (page) {
-      const isZipCode = await page.locator('text=/Zip Code Verification|Zipcode|Customer ZipCode/i').first().isVisible({ timeout: 5000 }).catch(() => false);
-      if (!isZipCode) {
-        console.log('⚠ Not on Zip Code! Using Hamburger menu to navigate to Zip Code Verification...');
+    if (await appStatusPage.isCurrentScreen('Approval Details')) {
+      await test.step('Hamburger Navigation to Zip Code Details', async () => {
+        console.log('⚠ Landed on Approval Details! Using Hamburger menu to navigate to Zip Code Details...');
         const hamburger = page.getByRole('button', { name: '...' }).first()
           .or(page.getByText('...', { exact: true }).first())
           .or(page.locator('.slds-icon-utility-rows').first());
-          
-        await hamburger.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(1500);
-        
-        const targetLink = page.getByRole('button', { name: /Zip Code Verification/i })
+
+        await hamburger.click({ force: true });
+
+        const targetLink = page.getByRole('button', { name: 'Zip Code Verification' })
           .or(page.getByRole('menuitem', { name: /Zip Code Verification/i }));
-          
-        await targetLink.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(2000);
-      }
+
+        await targetLink.click({ force: true });
+        console.log('✓ Hamburger navigation to Zip Code Details complete.');
+      });
     }
 
-    // Step 4: Zip code
-    const zipCodeData = {
-      zipCode: testData["zipcodelabel"] || "Enter Customer ZipCode",
-      zipCodeValue: testData["zipcodevalue"] || "411014 Pune",
-      bflBranch: testData["bflbranchvalue"] || "411014-Manual Testing Pune",
-      dob: testData["dobvalue"] || "18-12-1996",
-      gender: testData["gendervalue"] || "Male",
-      language: testData["preferredcommunicationlanguagevalue"] || "English",
-      preferredLanguage: testData["preferredlanguagevalue"] || "HINDI",
-      poaAddressType: testData["poaaddresstype"],
-    };
-    await zipCodePage.fillZipCodeDetails(zipCodeData);
-    await zipCodePage.proceed(testData["proceedbuttonvalue"] || "Proceed");
+    await test.step('Zip Code Details', async () => {
+      await zipCodePage.fillZipCodeDetails({
+        zipCode: testData['zipcodelabel'] || 'Enter Customer ZipCode',
+        zipCodeValue: '411014',
+        bflBranch: testData['bflbranchvalue'] || '411014-Manual Testing Pune',
+        dob: testData['dobvalue'] || '18-12-1996',
+        gender: testData['gendervalue'] || 'Male',
+        language: testData['preferredcommunicationlanguagevalue'] || 'English',
+        preferredLanguage: testData['preferredlanguagevalue'] || 'HINDI',
+        poaAddressType: testData['poaaddresstype'],
+      });
+      await zipCodePage.proceed(testData['proceedbuttonvalue'] || 'Proceed');
+    });
 
-    // Step 4a: fill MITC details
-    const mitcData = {
-       firstName: testData["firstname"] || "Dummycust",
-        lastName: testData["lastname"] || "Doe",
-    };
-    await mitcPage.fillMitcDetailsWithFirstAndLastName(
-      mitcData.firstName,
-      mitcData.lastName,
-      testData["proceedbuttonvalue"] || "Proceed"
-    );
+    if (await mitcPage.isCurrentScreen('MITC')) {
+      await test.step('MITC Details', async () => {
+        await mitcPage.fillMitcDetailsWithFirstAndLastName(
+          testData['firstname'] || 'Dummycust',
+          testData['lastname'] || 'Doe',
+          testData['proceedbuttonvalue'] || 'Proceed'
+        );
+        await mitcPage.proceedToPanVerification(testData['proceedbuttonvalue'] || 'Proceed');
+      });
+    }
 
-    await page.waitForTimeout(2000);
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
-
-    await expect(page.getByRole('button', { name: 'Proceed', exact: true })).toBeVisible({ timeout: config.timeouts.element });
-    await page.getByRole('button', { name: 'Proceed', exact: true }).click();
+    await page.waitForTimeout(3000);
 
     // Click 'Yes' for "Does Customer have PAN Card?" prompt if it appears
     const yesBtn = page.getByRole('button', { name: 'Yes', exact: true });
@@ -129,7 +120,7 @@ test.describe('05 - PAN Verification (Data Verification)', () => {
       console.log('ℹ "Enter Manually" button not visible — skipping');
     }
 
-    await expect(page.getByText('Data Verification')).toBeVisible({ timeout: config.timeouts.element });
+    await expect(page.getByText('Pan Details')).toBeVisible({ timeout: config.timeouts.element });
     console.log('✓ PAN verification screen reached successfully');
   }
 
